@@ -113,15 +113,19 @@ export default function useDesignEditor(canvasElement) {
     canvas.on('object:scaling', handleObjectChanged)
     canvas.on('object:rotating', handleObjectChanged)
     canvas.on('object:modified', handleObjectChanged)
-
+    canvas.on('object:modified', refreshDesignPreview)
     canvas.on('object:added', refreshLayers)
+    canvas.on('object:added', refreshDesignPreview)
     canvas.on('object:removed', refreshLayers)
+    canvas.on('object:removed', refreshDesignPreview)
+    canvas.on('text:changed', refreshDesignPreview)
+    canvas.on('text:editing:exited', refreshDesignPreview)
 
     return () => {
       canvas.dispose()
       canvasRef.current = null
     }
-  }, [canvasElement, refreshLayers, syncSelectedObject])
+  }, [canvasElement, refreshLayers, refreshDesignPreview, syncSelectedObject])
 
   const uploadImage = useCallback(async (file) => {
     const canvas = canvasRef.current
@@ -302,6 +306,34 @@ export default function useDesignEditor(canvasElement) {
     syncSelectedObject(active)
   }, [syncSelectedObject])
 
+  const [designPreview, setDesignPreview] = useState(null)
+
+  const refreshDesignPreview = useCallback(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const { left, top, width, height } = EDITOR_CONFIG.printArea
+    const previousBackground = canvas.backgroundColor
+
+    try {
+      // Preview transparan hanya berisi desain di area cetak.
+      canvas.backgroundColor = ''
+      const preview = canvas.toDataURL({
+        format: 'png',
+        left,
+        top,
+        width,
+        height,
+        multiplier: 1,
+        enableRetinaScaling: false,
+      })
+      setDesignPreview(preview)
+    } finally {
+      canvas.backgroundColor = previousBackground
+      canvas.requestRenderAll()
+    }
+  }, [])
+
   const [analysis, setAnalysis] = useState(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analysisError, setAnalysisError] = useState('')
@@ -417,6 +449,7 @@ return {
   selectedObject,
   layers,
   analysis,
+  designPreview,
   isAnalyzing,
   analysisError,
   analyzeSelectedImage,
