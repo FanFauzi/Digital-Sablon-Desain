@@ -40,8 +40,13 @@ export default function EditorToolbar({ editor }) {
       </button>
 
       <button
-        onClick={() => editor.analyzeSelectedImage().catch(() => {})}
-        disabled={!editor.selectedObject || editor.selectedObject.type !== 'image' || editor.isAnalyzing}
+        type="button"
+        className="ai-analysis-button"
+        onClick={() => {
+          editor.analyzeSelectedImage().catch((error) => {
+            alert(error.message || 'Pilih gambar terlebih dahulu untuk dianalisis.')
+          })
+        }}
       >
         {editor.isAnalyzing ? 'Menganalisis...' : '✦ Analisis AI'}
       </button>
