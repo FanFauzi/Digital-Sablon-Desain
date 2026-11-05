@@ -39,7 +39,10 @@ export default function EditorPage() {
 
         setShirt(data)
 
-        const firstVariant = data.variants?.[0]
+        const firstVariant =
+          data.variants?.find((variant) => variant.size === 'M') ||
+          data.variants?.[0]
+
         if (firstVariant) {
           setSelectedColor(firstVariant.color_hex)
           setSelectedSize(firstVariant.size)
