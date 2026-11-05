@@ -300,6 +300,43 @@ export default function useDesignEditor(canvasElement) {
     syncSelectedObject(active)
   }, [syncSelectedObject])
 
+  const exportDesign = useCallback(() => {
+    const canvas = canvasRef.current
+
+    if (!canvas) {
+      throw new Error('Kanvas desain belum siap.')
+    }
+
+    const { left, top, width, height } = EDITOR_CONFIG.printArea
+    const previousBackground = canvas.backgroundColor
+
+    try {
+      // Hasil ekspor hanya area cetak, tanpa latar putih editor.
+      canvas.backgroundColor = ''
+      canvas.requestRenderAll()
+
+      const dataUrl = canvas.toDataURL({
+        format: 'png',
+        left,
+        top,
+        width,
+        height,
+        multiplier: 1,
+        enableRetinaScaling: false,
+      })
+
+      const link = document.createElement('a')
+      link.href = dataUrl
+      link.download = `digital-sablon-desain-${Date.now()}.png`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+    } finally {
+      canvas.backgroundColor = previousBackground
+      canvas.requestRenderAll()
+    }
+  }, [])
+
   const resizeCanvas = useCallback((displayWidth) => {
     const canvas = canvasRef.current
 
@@ -334,6 +371,7 @@ return {
   moveLayer,
   selectLayer,
   updateProperty,
+  exportDesign,
   resizeCanvas,
 }
 }
