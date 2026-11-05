@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Canvas,
   FabricImage,
-  FabricText,
+  IText,
   Rect,
 } from 'fabric'
 
@@ -176,7 +176,7 @@ export default function useDesignEditor(canvasElement) {
     const canvas = canvasRef.current
     if (!canvas) return
 
-    const text = new FabricText('Tulis desainmu', {
+    const text = new IText('Tulis desainmu', {
       left: 500,
       top: 600,
       originX: 'center',
@@ -238,6 +238,14 @@ export default function useDesignEditor(canvasElement) {
       canvas.bringObjectForward(object)
     } else {
       canvas.sendObjectBackwards(object)
+    }
+
+    // Area cetak harus selalu berada di belakang seluruh objek desain.
+    const printBoundary = canvas.getObjects()
+      .find((item) => item.isPrintBoundary)
+
+    if (printBoundary) {
+      canvas.sendObjectToBack(printBoundary)
     }
 
     canvas.setActiveObject(object)
