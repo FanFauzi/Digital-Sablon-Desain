@@ -7,6 +7,7 @@ import {
 } from 'fabric'
 
 import { EDITOR_CONFIG } from '../utils/editorConfig'
+import api from '../../../services/api'
 
 export default function useDesignEditor(canvasElement) {
   const canvasRef = useRef(null)
@@ -44,6 +45,7 @@ export default function useDesignEditor(canvasElement) {
       width: Math.round(object.getScaledWidth()),
       height: Math.round(object.getScaledHeight()),
       angle: Math.round(object.angle || 0),
+      type: object.type,
     })
   }, [])
 
@@ -300,6 +302,56 @@ export default function useDesignEditor(canvasElement) {
     syncSelectedObject(active)
   }, [syncSelectedObject])
 
+  const [analysis, setAnalysis] = useState(null)
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [analysisError, setAnalysisError] = useState('')
+
+  const analyzeSelectedImage = useCallback(async () => {
+    const canvas = canvasRef.current
+    const active = canvas?.getActiveObject()
+
+    if (!active || active.type !== 'image' || typeof active.getElement !== 'function') {
+      throw new Error('Pilih objek gambar terlebih dahulu untuk dianalisis.')
+    }
+
+    setIsAnalyzing(true)
+    setAnalysisError('')
+    setAnalysis(null)
+
+    try {
+      const source = active.getElement()
+      const imageCanvas = document.createElement('canvas')
+      imageCanvas.width = source.naturalWidth || source.width
+      imageCanvas.height = source.naturalHeight || source.height
+
+      if (!imageCanvas.width || !imageCanvas.height) {
+        throw new Error('Gambar tidak dapat dibaca oleh browser.')
+      }
+
+      const context = imageCanvas.getContext('2d')
+      context.drawImage(source, 0, 0, imageCanvas.width, imageCanvas.height)
+
+      const blob = await new Promise((resolve) => imageCanvas.toBlob(resolve, 'image/png'))
+
+      if (!blob) {
+        throw new Error('Gagal menyiapkan gambar untuk analisis.')
+      }
+
+      const formData = new FormData()
+      formData.append('image', blob, 'design-analysis.png')
+
+      const response = await api.post('/api/v1/designs/analyze', formData)
+      setAnalysis(response.data.data)
+      return response.data.data
+    } catch (error) {
+      const message = error.response?.data?.message || error.message || 'Analisis AI gagal.'
+      setAnalysisError(message)
+      throw new Error(message)
+    } finally {
+      setIsAnalyzing(false)
+    }
+  }, [])
+
   const exportDesign = useCallback(() => {
     const canvas = canvasRef.current
 
@@ -364,6 +416,10 @@ return {
   canvasRef,
   selectedObject,
   layers,
+  analysis,
+  isAnalyzing,
+  analysisError,
+  analyzeSelectedImage,
   uploadImage,
   addText,
   deleteSelected,
