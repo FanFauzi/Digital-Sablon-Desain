@@ -13,12 +13,15 @@ class DesignAnalysisController extends Controller
 {
     public function analyze(Request $request): JsonResponse
     {
+        // Beri waktu lebih panjang untuk respons analisis multimodal dari Gemini.
+        set_time_limit(120);
+
         $validated = $request->validate([
             'image' => ['required', 'file', 'image', 'mimes:png,jpg,jpeg,webp', 'max:10240'],
         ]);
 
         $apiKey = config('services.gemini.api_key');
-        $model = config('services.gemini.model', 'gemini-2.5-flash');
+        $model = config('services.gemini.model', 'gemini-3.8-flash');
 
         if (!$apiKey) {
             return response()->json([
@@ -75,7 +78,8 @@ PROMPT;
         try {
             $response = Http::acceptJson()
                 ->withHeaders(['x-goog-api-key' => $apiKey])
-                ->timeout(60)
+                ->connectTimeout(15)
+                ->timeout(90)
                 ->post(
                     "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent",
                     [
