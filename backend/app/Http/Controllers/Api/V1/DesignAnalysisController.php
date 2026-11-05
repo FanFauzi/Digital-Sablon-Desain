@@ -76,30 +76,70 @@ Rules:
 PROMPT;
 
         try {
-            $response = Http::acceptJson()
-                ->withHeaders(['x-goog-api-key' => $apiKey])
-                ->connectTimeout(15)
-                ->timeout(90)
-                ->post(
-                    "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent",
-                    [
-                        'contents' => [[
-                            'parts' => [
-                                ['text' => $prompt],
-                                [
-                                    'inline_data' => [
-                                        'mime_type' => $mimeType,
-                                        'data' => base64_encode(file_get_contents($file->getRealPath())),
-                                    ],
-                                ],
+            $payload = [
+                'contents' => [[
+                    'parts' => [
+                        ['text' => $prompt],
+                        [
+                            'inline_data' => [
+                                'mime_type' => $mimeType,
+                                'data' => base64_encode(file_get_contents($file->getRealPath())),
                             ],
-                        ]],
-                        'generationConfig' => [
-                            'responseMimeType' => 'application/json',
-                            'temperature' => 0.2,
                         ],
-                    ]
-                );
+                    ],
+                ]],
+                'generationConfig' => [
+                    'responseMimeType' => 'application/json',
+                    'temperature' => 0.2,
+                ],
+            ];
+
+            $retryableStatuses = [429, 500, 502, 503, 504];
+            $response = null;
+
+            // Retry terbatas untuk timeout dan gangguan sementara dari Gemini.
+            // Total waktu maksimum sekitar 95 detik, masih di bawah batas PHP 120 detik.
+            for ($attempt = 1; $attempt <= 3; $attempt++) {
+                try {
+                    $response = Http::acceptJson()
+                        ->withHeaders(['x-goog-api-key' => $apiKey])
+                        ->connectTimeout(10)
+                        ->timeout(30)
+                        ->post(
+                            "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent",
+                            $payload
+                        );
+                } catch (ConnectionException $exception) {
+                    Log::warning('Gemini connection attempt failed.', [
+                        'attempt' => $attempt,
+                        'message' => $exception->getMessage(),
+                    ]);
+
+                    if ($attempt === 3) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Layanan AI belum merespons setelah beberapa percobaan. Silakan coba lagi.',
+                        ], 504);
+                    }
+
+                    usleep(($attempt * 1000000) + random_int(0, 500000));
+                    continue;
+                }
+
+                if ($response->successful()
+                    || !in_array($response->status(), $retryableStatuses, true)
+                    || $attempt === 3) {
+                    break;
+                }
+
+                Log::notice('Gemini returned a temporary error; retrying.', [
+                    'attempt' => $attempt,
+                    'status' => $response->status(),
+                    'body' => $response->json('error.message'),
+                ]);
+
+                usleep(($attempt * 1000000) + random_int(0, 500000));
+            }
 
             if (!$response->successful()) {
                 Log::warning('Gemini design analysis request failed.', [
