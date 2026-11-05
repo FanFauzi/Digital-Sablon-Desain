@@ -257,7 +257,8 @@ export default function useDesignEditor(canvasElement) {
 
     canvas.requestRenderAll()
     syncSelectedObject(active)
-  }, [syncSelectedObject])
+    refreshDesignPreview()
+  }, [refreshDesignPreview, syncSelectedObject])
 
   const moveLayer = useCallback((id, direction) => {
     const canvas = canvasRef.current
@@ -287,7 +288,8 @@ export default function useDesignEditor(canvasElement) {
 
     syncSelectedObject(object)
     refreshLayers()
-  }, [refreshLayers, syncSelectedObject])
+    refreshDesignPreview()
+  }, [refreshDesignPreview, refreshLayers, syncSelectedObject])
 
   const selectLayer = useCallback((id) => {
     const canvas = canvasRef.current
@@ -332,7 +334,8 @@ export default function useDesignEditor(canvasElement) {
     active.setCoords()
     canvas.requestRenderAll()
     syncSelectedObject(active)
-  }, [syncSelectedObject])
+    refreshDesignPreview()
+  }, [refreshDesignPreview, syncSelectedObject])
 
   const [analysis, setAnalysis] = useState(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
