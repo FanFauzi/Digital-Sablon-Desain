@@ -29,6 +29,16 @@ export default function EditorToolbar({ editor }) {
         + Tambah Teks
       </button>
 
+      <button onClick={() => {
+        try {
+          editor.exportDesign()
+        } catch (error) {
+          alert(error.message || 'Gagal mengekspor desain.')
+        }
+      }}>
+        ↓ Export PNG
+      </button>
+
       <button
         onClick={() => editor.rotateSelected(90)}
         disabled={!editor.selectedObject}
