@@ -9,6 +9,7 @@ Route::get('/user', function (Request $request) {
 })->middleware('auth:sanctum');
 
 Route::prefix('v1')->group(function () {
+    Route::post('/designs/analyze', [DesignAnalysisController::class, 'analyze']);
     Route::get('/shirts', [ShirtController::class, 'index']);
     Route::get('/shirts/{id}', [ShirtController::class, 'show'])
         ->whereNumber('id');
