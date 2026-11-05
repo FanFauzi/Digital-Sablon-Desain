@@ -299,14 +299,14 @@ export default function useDesignEditor(canvasElement) {
     const displayHeight = EDITOR_CONFIG.height * scale
 
     // Pertahankan ukuran internal Fabric pada koordinat desain 1000 × 1200.
-    // Ubah ukuran CSS wrapper saja agar koordinat objek tidak ikut berubah.
+    // CSS scaling pada elemen kanvas akan menyesuaikan tampilan ke viewport.
     canvas.setDimensions({
       width: displayWidth,
       height: displayHeight,
     }, { cssOnly: true })
 
-    // Zoom Fabric mengubah tampilan sekaligus menjaga pemetaan pointer.
-    canvas.setZoom(scale)
+    // Hindari double scaling: jangan terapkan zoom Fabric di atas CSS scaling.
+    canvas.setViewportTransform([1, 0, 0, 1, 0, 0])
 
     canvas.calcOffset()
     canvas.requestRenderAll()
