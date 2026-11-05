@@ -66,6 +66,9 @@ export default function useDesignEditor(canvasElement) {
       top: EDITOR_CONFIG.printArea.top,
       width: EDITOR_CONFIG.printArea.width,
       height: EDITOR_CONFIG.printArea.height,
+      // Fabric.js 7: pastikan left/top dihitung dari sudut kiri atas.
+      originX: 'left',
+      originY: 'top',
       fill: 'rgba(0, 0, 0, 0)',
       stroke: '#a3a3a3',
       strokeWidth: 3,
