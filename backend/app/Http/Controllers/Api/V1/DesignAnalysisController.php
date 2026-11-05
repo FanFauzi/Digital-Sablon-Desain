@@ -103,6 +103,8 @@ PROMPT;
             $lastConnectionError = null;
 
             foreach ($modelsToTry as $candidateModel) {
+                $response = null;
+
                 for ($attempt = 1; $attempt <= 2; $attempt++) {
                     try {
                         $attemptResponse = Http::acceptJson()
@@ -117,6 +119,7 @@ PROMPT;
                         $usedModel = $candidateModel;
                         $lastConnectionError = null;
                     } catch (ConnectionException $exception) {
+                        $response = null;
                         $lastConnectionError = $exception;
                         Log::warning('Gemini connection attempt failed.', [
                             'model' => $candidateModel,
