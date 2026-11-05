@@ -1,13 +1,12 @@
 <?php
 
-namespace App\\Http\\Controllers\\Api\\V1;
+namespace App\Http\Controllers\Api\V1;
 
-use App\\Http\\Controllers\\Controller;
-use Illuminate\\Http\\JsonResponse;
-use Illuminate\\Http\\Request;
-use Illuminate\\Support\\Facades\\Http;
-use Illuminate\\Support\\Facades\\Log;
-use Illuminate\\Validation\\ValidationException;
+use App\Http\Controllers\Controller;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use JsonException;
 
 class DesignAnalysisController extends Controller
@@ -144,7 +143,7 @@ PROMPT;
                 'success' => false,
                 'message' => 'Hasil analisis AI tidak dapat diproses. Silakan coba lagi.',
             ], 502);
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             Log::error('Design analysis failed.', ['message' => $exception->getMessage()]);
             return response()->json([
                 'success' => false,
