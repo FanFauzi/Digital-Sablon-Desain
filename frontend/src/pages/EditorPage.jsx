@@ -121,11 +121,19 @@ export default function EditorPage() {
   const handleColorChange = (colorHex) => {
     setSelectedColor(colorHex)
 
-    const availableSize = shirt?.variants?.find(
-      (variant) => variant.color_hex === colorHex
-    )?.size
+    const availableSizes = (shirt?.variants || [])
+      .filter((variant) => variant.color_hex === colorHex)
+      .map((variant) => variant.size)
 
-    if (availableSize) setSelectedSize(availableSize)
+    if (availableSizes.length > 0) {
+      const nextSize = availableSizes.includes(selectedSize)
+        ? selectedSize
+        : availableSizes.includes('M')
+          ? 'M'
+          : availableSizes[0]
+
+      setSelectedSize(nextSize)
+    }
   }
 
   return (
