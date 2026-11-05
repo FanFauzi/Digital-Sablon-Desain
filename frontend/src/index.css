@@ -439,9 +439,9 @@ a {
 }
 
 .canvas-viewport .canvas-container {
-  position: relative !important;
-  display: block;
-  margin: 0 auto;
+  position: absolute !important;
+  top: 0;
+  left: 0;
 }
 
 .canvas-viewport canvas {
