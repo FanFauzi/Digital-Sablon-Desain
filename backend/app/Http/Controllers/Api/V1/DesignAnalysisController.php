@@ -91,67 +91,111 @@ PROMPT;
                 ]],
                 'generationConfig' => [
                     'responseMimeType' => 'application/json',
-                    'temperature' => 0.2,
                 ],
             ];
 
+            // Coba model utama terlebih dahulu. Jika 3.8 mengalami overload,
+            // alihkan ke 3.6 Flash yang juga mendukung tugas multimodal.
+            $modelsToTry = array_values(array_unique([$model, 'gemini-3.6-flash']));
             $retryableStatuses = [429, 500, 502, 503, 504];
             $response = null;
+            $usedModel = null;
+            $lastConnectionError = null;
 
-            // Retry terbatas untuk timeout dan gangguan sementara dari Gemini.
-            // Total waktu maksimum sekitar 95 detik, masih di bawah batas PHP 120 detik.
-            for ($attempt = 1; $attempt <= 3; $attempt++) {
-                try {
-                    $response = Http::acceptJson()
-                        ->withHeaders(['x-goog-api-key' => $apiKey])
-                        ->connectTimeout(10)
-                        ->timeout(30)
-                        ->post(
-                            "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent",
-                            $payload
-                        );
-                } catch (ConnectionException $exception) {
-                    Log::warning('Gemini connection attempt failed.', [
-                        'attempt' => $attempt,
-                        'message' => $exception->getMessage(),
-                    ]);
+            foreach ($modelsToTry as $candidateModel) {
+                for ($attempt = 1; $attempt <= 2; $attempt++) {
+                    try {
+                        $attemptResponse = Http::acceptJson()
+                            ->withHeaders(['x-goog-api-key' => $apiKey])
+                            ->connectTimeout(10)
+                            ->timeout(20)
+                            ->post(
+                                "https://generativelanguage.googleapis.com/v1beta/models/{$candidateModel}:generateContent",
+                                $payload
+                            );
+                        $response = $attemptResponse;
+                        $usedModel = $candidateModel;
+                        $lastConnectionError = null;
+                    } catch (ConnectionException $exception) {
+                        $lastConnectionError = $exception;
+                        Log::warning('Gemini connection attempt failed.', [
+                            'model' => $candidateModel,
+                            'attempt' => $attempt,
+                            'message' => $exception->getMessage(),
+                        ]);
 
-                    if ($attempt === 3) {
-                        return response()->json([
-                            'success' => false,
-                            'message' => 'Layanan AI belum merespons setelah beberapa percobaan. Silakan coba lagi.',
-                        ], 504);
+                        if ($attempt < 2) {
+                            usleep(1000000 + random_int(0, 500000));
+                            continue;
+                        }
+
+                        // Model berikutnya akan dicoba setelah koneksi model ini gagal.
+                        break;
                     }
 
-                    usleep(($attempt * 1000000) + random_int(0, 500000));
-                    continue;
+                    if ($response->successful()) {
+                        break 2;
+                    }
+
+                    $status = $response->status();
+                    Log::notice('Gemini returned an error during design analysis.', [
+                        'model' => $candidateModel,
+                        'attempt' => $attempt,
+                        'status' => $status,
+                        'body' => $response->json('error.message'),
+                    ]);
+
+                    // Jangan pindah model untuk kesalahan autentikasi, model tidak ditemukan,
+                    // atau payload tidak valid. 429 juga lebih tepat ditangani sebagai limit akun.
+                    if (!in_array($status, $retryableStatuses, true) || $status === 429) {
+                        break 2;
+                    }
+
+                    if ($attempt < 2) {
+                        usleep(1000000 + random_int(0, 500000));
+                    }
+
+                    // Setelah dua kali gagal 5xx, lanjutkan ke model cadangan.
                 }
-
-                if ($response->successful()
-                    || !in_array($response->status(), $retryableStatuses, true)
-                    || $attempt === 3) {
-                    break;
-                }
-
-                Log::notice('Gemini returned a temporary error; retrying.', [
-                    'attempt' => $attempt,
-                    'status' => $response->status(),
-                    'body' => $response->json('error.message'),
-                ]);
-
-                usleep(($attempt * 1000000) + random_int(0, 500000));
             }
 
-            if (!$response->successful()) {
-                Log::warning('Gemini design analysis request failed.', [
-                    'status' => $response->status(),
-                    'body' => $response->json('error.message'),
+            if (!$response || !$response->successful()) {
+                if ($response) {
+                    $status = $response->status();
+                    Log::warning('Gemini design analysis failed after retries.', [
+                        'model' => $usedModel,
+                        'status' => $status,
+                        'body' => $response->json('error.message'),
+                    ]);
+
+                    if ($status === 429) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Batas penggunaan Gemini tercapai. Periksa kuota atau coba lagi setelah beberapa saat.',
+                        ], 429);
+                    }
+
+                    if (in_array($status, [503, 504], true)) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Model AI utama dan cadangan sedang sibuk. Silakan coba lagi beberapa saat.',
+                        ], 503);
+                    }
+
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Layanan AI gagal menganalisis gambar. Periksa konfigurasi Gemini dan coba lagi.',
+                    ], 502);
+                }
+
+                Log::error('All Gemini model connection attempts failed.', [
+                    'message' => $lastConnectionError?->getMessage(),
                 ]);
 
                 return response()->json([
                     'success' => false,
-                    'message' => 'Layanan AI gagal menganalisis gambar. Coba lagi beberapa saat.',
-                ], 502);
+                    'message' => 'Koneksi ke layanan AI terputus atau terlalu lama. Silakan coba lagi.',
+                ], 504);
             }
 
             $text = $response->json('candidates.0.content.parts.0.text');
@@ -177,7 +221,7 @@ PROMPT;
                 'message' => 'Analisis desain berhasil.',
                 'data' => $analysis,
                 'meta' => [
-                    'model' => $model,
+                    'model' => $usedModel,
                     'mime_type' => $mimeType,
                     'image_size_bytes' => $file->getSize(),
                 ],
