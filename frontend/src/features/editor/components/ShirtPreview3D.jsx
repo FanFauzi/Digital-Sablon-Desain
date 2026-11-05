@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { Suspense, useMemo } from 'react'
 import { Canvas, useLoader } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
@@ -105,12 +105,14 @@ export default function ShirtPreview3D({
           shadow-mapSize-height={1024}
         />
         <directionalLight position={[-3, 1, -3]} intensity={0.7} />
-        <Garment
-          color={color}
-          side={side}
-          productType={productType}
-          designPreview={designPreview}
-        />
+        <Suspense fallback={null}>
+          <Garment
+            color={color}
+            side={side}
+            productType={productType}
+            designPreview={designPreview}
+          />
+        </Suspense>
         <OrbitControls
           enablePan={false}
           minDistance={3.2}
