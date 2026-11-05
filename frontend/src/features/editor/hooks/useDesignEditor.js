@@ -49,6 +49,34 @@ export default function useDesignEditor(canvasElement) {
     })
   }, [])
 
+  const [designPreview, setDesignPreview] = useState(null)
+
+  const refreshDesignPreview = useCallback(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const { left, top, width, height } = EDITOR_CONFIG.printArea
+    const previousBackground = canvas.backgroundColor
+
+    try {
+      // Preview transparan hanya berisi desain di area cetak.
+      canvas.backgroundColor = ''
+      const preview = canvas.toDataURL({
+        format: 'png',
+        left,
+        top,
+        width,
+        height,
+        multiplier: 1,
+        enableRetinaScaling: false,
+      })
+      setDesignPreview(preview)
+    } finally {
+      canvas.backgroundColor = previousBackground
+      canvas.requestRenderAll()
+    }
+  }, [])
+
   useEffect(() => {
     if (!canvasElement.current) return
 
@@ -305,34 +333,6 @@ export default function useDesignEditor(canvasElement) {
     canvas.requestRenderAll()
     syncSelectedObject(active)
   }, [syncSelectedObject])
-
-  const [designPreview, setDesignPreview] = useState(null)
-
-  const refreshDesignPreview = useCallback(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-
-    const { left, top, width, height } = EDITOR_CONFIG.printArea
-    const previousBackground = canvas.backgroundColor
-
-    try {
-      // Preview transparan hanya berisi desain di area cetak.
-      canvas.backgroundColor = ''
-      const preview = canvas.toDataURL({
-        format: 'png',
-        left,
-        top,
-        width,
-        height,
-        multiplier: 1,
-        enableRetinaScaling: false,
-      })
-      setDesignPreview(preview)
-    } finally {
-      canvas.backgroundColor = previousBackground
-      canvas.requestRenderAll()
-    }
-  }, [])
 
   const [analysis, setAnalysis] = useState(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
