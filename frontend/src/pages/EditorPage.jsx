@@ -7,6 +7,7 @@ import { EDITOR_CONFIG } from '../features/editor/utils/editorConfig'
 import EditorToolbar from '../features/editor/components/EditorToolbar'
 import PropertiesPanel from '../features/editor/components/PropertiesPanel'
 import LayerPanel from '../features/editor/components/LayerPanel'
+import AIAnalysisPanel from '../features/editor/components/AIAnalysisPanel'
 
 export default function EditorPage() {
   const { shirtId } = useParams()
@@ -69,6 +70,7 @@ export default function EditorPage() {
         <aside className="editor-sidebar">
           <PropertiesPanel editor={editor} />
           <LayerPanel editor={editor} />
+          <AIAnalysisPanel editor={editor} />
         </aside>
       </div>
     </main>
