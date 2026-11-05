@@ -340,7 +340,7 @@ export default function useDesignEditor(canvasElement) {
       const formData = new FormData()
       formData.append('image', blob, 'design-analysis.png')
 
-      const response = await api.post('/api/v1/designs/analyze', formData)
+      const response = await api.post('/designs/analyze', formData)
       setAnalysis(response.data.data)
       return response.data.data
     } catch (error) {
