@@ -29,6 +29,28 @@ export default function EditorToolbar({ editor }) {
         + Tambah Teks
       </button>
 
+      <button onClick={() => {
+        try {
+          editor.exportDesign()
+        } catch (error) {
+          alert(error.message || 'Gagal mengekspor desain.')
+        }
+      }}>
+        ↓ Export PNG
+      </button>
+
+      <button
+        type="button"
+        className="ai-analysis-button"
+        onClick={() => {
+          editor.analyzeSelectedImage().catch((error) => {
+            alert(error.message || 'Pilih gambar terlebih dahulu untuk dianalisis.')
+          })
+        }}
+      >
+        {editor.isAnalyzing ? 'Menganalisis...' : '✦ Analisis AI'}
+      </button>
+
       <button
         onClick={() => editor.rotateSelected(90)}
         disabled={!editor.selectedObject}
