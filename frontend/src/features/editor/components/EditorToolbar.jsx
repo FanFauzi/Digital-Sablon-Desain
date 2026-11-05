@@ -40,6 +40,13 @@ export default function EditorToolbar({ editor }) {
       </button>
 
       <button
+        onClick={() => editor.analyzeSelectedImage().catch(() => {})}
+        disabled={!editor.selectedObject || editor.selectedObject.type !== 'image' || editor.isAnalyzing}
+      >
+        {editor.isAnalyzing ? 'Menganalisis...' : '✦ Analisis AI'}
+      </button>
+
+      <button
         onClick={() => editor.rotateSelected(90)}
         disabled={!editor.selectedObject}
       >
