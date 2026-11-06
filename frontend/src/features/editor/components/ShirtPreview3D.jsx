@@ -64,9 +64,14 @@ function Garment({ color, side, productType, designPreview }) {
 }
 
 function ArtworkTexture({ src }) {
-  const texture = useLoader(THREE.TextureLoader, src)
-  texture.colorSpace = THREE.SRGBColorSpace
-  texture.anisotropy = 8
+  const loadedTexture = useLoader(THREE.TextureLoader, src)
+  const texture = useMemo(() => {
+    const preparedTexture = loadedTexture.clone()
+    preparedTexture.colorSpace = THREE.SRGBColorSpace
+    preparedTexture.anisotropy = 8
+    preparedTexture.needsUpdate = true
+    return preparedTexture
+  }, [loadedTexture])
 
   return (
     <mesh position={[0, -0.02, 0.105]}>
