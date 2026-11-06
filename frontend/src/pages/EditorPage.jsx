@@ -18,6 +18,7 @@ export default function EditorPage() {
   const viewportRef = useRef(null)
 
   const editor = useDesignEditor(canvasElement)
+  const { resizeCanvas } = editor
 
   const [shirt, setShirt] = useState(null)
   const [shirtLoading, setShirtLoading] = useState(true)
@@ -77,7 +78,7 @@ export default function EditorPage() {
         EDITOR_CONFIG.width
       )
 
-      editor.resizeCanvas(displayWidth)
+      resizeCanvas(displayWidth)
     }
 
     const observer = new ResizeObserver(updateCanvasSize)
@@ -86,7 +87,7 @@ export default function EditorPage() {
     updateCanvasSize()
 
     return () => observer.disconnect()
-  }, [editor.resizeCanvas])
+  }, [resizeCanvas])
 
   const colorOptions = [
     ...new Map(
