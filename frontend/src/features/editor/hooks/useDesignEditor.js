@@ -381,7 +381,7 @@ export default function useDesignEditor(canvasElement) {
     } catch (error) {
       const message = error.response?.data?.message || error.message || 'Analisis AI gagal.'
       setAnalysisError(message)
-      throw new Error(message)
+      throw new Error(message, { cause: error })
     } finally {
       setIsAnalyzing(false)
     }
