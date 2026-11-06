@@ -4,7 +4,7 @@ import useDesignEditor from '../hooks/useDesignEditor'
 export default function DesignCanvas() {
   const canvasElement = useRef(null)
 
-  const editor = useDesignEditor(canvasElement)
+  useDesignEditor(canvasElement)
 
   return (
     <div className="design-workspace">
