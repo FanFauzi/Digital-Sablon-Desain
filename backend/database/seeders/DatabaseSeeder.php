@@ -22,7 +22,7 @@ class DatabaseSeeder extends Seeder
         ]);
 
         // Akun demo hanya dibuat pada lingkungan lokal/testing, bukan produksi.
-        if (app()->environment(['local', 'testing'])) {
+        if (app()->environment('local') || app()->environment('testing')) {
             User::query()->firstOrCreate(
                 ['email' => 'test@example.com'],
                 [
