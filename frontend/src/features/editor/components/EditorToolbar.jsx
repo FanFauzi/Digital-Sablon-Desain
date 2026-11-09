@@ -36,11 +36,11 @@ export default function EditorToolbar({ editor, exportOptions }) {
           try {
             const result = await editor.exportDesign(exportOptions)
             const clippingMessage = result.warningCount > 0
-              ? `\\nPeringatan: ${result.warningCount} objek berada di luar batas area cetak dan akan terpotong.`
+              ? `\nPeringatan: ${result.warningCount} objek berada di luar batas area cetak dan akan terpotong.`
               : ''
 
             alert(
-              `PNG siap diunduh: ${result.pixelWidth} × ${result.pixelHeight} px\\n` +
+              `PNG siap diunduh: ${result.pixelWidth} × ${result.pixelHeight} px\n` +
               `${result.physicalWidthCm} × ${result.physicalHeightCm} cm @ ${result.dpi} DPI` +
               clippingMessage
             )
