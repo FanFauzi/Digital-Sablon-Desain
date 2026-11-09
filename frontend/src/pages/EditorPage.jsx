@@ -261,8 +261,8 @@ export default function EditorPage() {
     setIsSwitchingSide(true)
 
     try {
-      await editor.switchDesignSide(nextSide, nextPrintArea)
-      setSelectedSide(nextSide)
+      const switched = await editor.switchDesignSide(nextSide, nextPrintArea)
+      if (switched) setSelectedSide(nextSide)
     } catch (error) {
       console.error(error)
       alert(error.message || 'Gagal mengganti sisi desain.')
