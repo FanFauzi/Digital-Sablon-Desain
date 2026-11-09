@@ -676,7 +676,6 @@ export default function useDesignEditor(canvasElement) {
     const previousBackground = canvas.backgroundColor
 
     try {
-      canvas.discardActiveObject()
       canvas.backgroundColor = ''
       canvas.requestRenderAll()
 
@@ -730,7 +729,7 @@ export default function useDesignEditor(canvasElement) {
       document.body.appendChild(link)
       link.click()
       link.remove()
-      URL.revokeObjectURL(objectUrl)
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
 
       return {
         fileName,
