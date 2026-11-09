@@ -343,6 +343,7 @@ export default function EditorPage() {
               side={selectedSide}
               productType={shirt.type}
               designPreview={editor.designPreview}
+              designPreviewVersion={editor.designPreviewVersion}
             />
 
             <p className="preview-product-name">
