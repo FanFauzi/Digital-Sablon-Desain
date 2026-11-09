@@ -9,6 +9,48 @@ import {
 import { EDITOR_CONFIG } from '../utils/editorConfig'
 import api from '../../../services/api'
 
+function createPrintBoundary() {
+  const boundary = new Rect({
+    left: EDITOR_CONFIG.printArea.left,
+    top: EDITOR_CONFIG.printArea.top,
+    width: EDITOR_CONFIG.printArea.width,
+    height: EDITOR_CONFIG.printArea.height,
+    originX: 'left',
+    originY: 'top',
+    fill: 'rgba(0, 0, 0, 0)',
+    stroke: '#a3a3a3',
+    strokeWidth: 3,
+    strokeDashArray: [12, 8],
+    selectable: false,
+    evented: false,
+    excludeFromExport: true,
+  })
+
+  boundary.isPrintBoundary = true
+  return boundary
+}
+
+async function imageElementToDataUrl(element) {
+  const width = element.naturalWidth || element.width
+  const height = element.naturalHeight || element.height
+
+  if (!width || !height) {
+    throw new Error('Gambar pada proyek tidak dapat dibaca.')
+  }
+
+  const temporaryCanvas = document.createElement('canvas')
+  temporaryCanvas.width = width
+  temporaryCanvas.height = height
+
+  const context = temporaryCanvas.getContext('2d')
+  if (!context) {
+    throw new Error('Browser tidak dapat menyiapkan gambar proyek.')
+  }
+
+  context.drawImage(element, 0, 0, width, height)
+  return temporaryCanvas.toDataURL('image/png')
+}
+
 export default function useDesignEditor(canvasElement) {
   const canvasRef = useRef(null)
 
@@ -90,25 +132,7 @@ export default function useDesignEditor(canvasElement) {
 
     canvasRef.current = canvas
 
-    // Area cetak: persegi panjang utuh.
-    const boundary = new Rect({
-      left: EDITOR_CONFIG.printArea.left,
-      top: EDITOR_CONFIG.printArea.top,
-      width: EDITOR_CONFIG.printArea.width,
-      height: EDITOR_CONFIG.printArea.height,
-      // Fabric.js 7: pastikan left/top dihitung dari sudut kiri atas.
-      originX: 'left',
-      originY: 'top',
-      fill: 'rgba(0, 0, 0, 0)',
-      stroke: '#a3a3a3',
-      strokeWidth: 3,
-      strokeDashArray: [12, 8],
-      selectable: false,
-      evented: false,
-      excludeFromExport: true,
-    })
-
-    boundary.isPrintBoundary = true
+    const boundary = createPrintBoundary()
 
     canvas.add(boundary)
     canvas.sendObjectToBack(boundary)
@@ -337,6 +361,57 @@ export default function useDesignEditor(canvasElement) {
     refreshDesignPreview()
   }, [refreshDesignPreview, syncSelectedObject])
 
+  const serializeCanvas = useCallback(async () => {
+    const canvas = canvasRef.current
+
+    if (!canvas) {
+      throw new Error('Kanvas desain belum siap untuk disimpan.')
+    }
+
+    const snapshot = canvas.toObject(['editorId', 'editorName'])
+    const designObjects = canvas.getObjects()
+      .filter((object) => !object.isPrintBoundary)
+
+    snapshot.objects = await Promise.all(
+      designObjects.map(async (object) => {
+        const serialized = object.toObject(['editorId', 'editorName'])
+
+        // Blob URL tidak bertahan setelah halaman ditutup. Simpan gambar
+        // sebagai data URL agar proyek dapat dipulihkan setelah browser dibuka.
+        if (object.type === 'image' && typeof object.getElement === 'function') {
+          serialized.src = await imageElementToDataUrl(object.getElement())
+          serialized.crossOrigin = undefined
+        }
+
+        return serialized
+      })
+    )
+
+    return snapshot
+  }, [])
+
+  const restoreCanvas = useCallback(async (snapshot) => {
+    const canvas = canvasRef.current
+
+    if (!canvas || !snapshot || !Array.isArray(snapshot.objects)) {
+      throw new Error('Data proyek tidak valid atau kanvas belum siap.')
+    }
+
+    canvas.discardActiveObject()
+    canvas.clear()
+    await canvas.loadFromJSON(snapshot)
+
+    const boundary = createPrintBoundary()
+    canvas.add(boundary)
+    canvas.sendObjectToBack(boundary)
+    canvas.backgroundColor = '#ffffff'
+    canvas.requestRenderAll()
+
+    setSelectedObject(null)
+    refreshLayers()
+    refreshDesignPreview()
+  }, [refreshDesignPreview, refreshLayers])
+
   const [analysis, setAnalysis] = useState(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analysisError, setAnalysisError] = useState('')
@@ -453,6 +528,8 @@ return {
   layers,
   analysis,
   designPreview,
+  serializeCanvas,
+  restoreCanvas,
   isAnalyzing,
   analysisError,
   analyzeSelectedImage,
