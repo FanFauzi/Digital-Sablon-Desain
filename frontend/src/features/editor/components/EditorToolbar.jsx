@@ -49,7 +49,7 @@ export default function EditorToolbar({ editor, exportOptions }) {
           }
         }}
       >
-        ↓ Export PNG 300 DPI
+        ↓ Export PNG ({exportOptions?.printArea?.dpi || 300} DPI)
       </button>
 
       <button
