@@ -21,9 +21,15 @@ class DatabaseSeeder extends Seeder
             ShirtSeeder::class,
         ]);
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        // Akun demo hanya dibuat pada lingkungan lokal/testing, bukan produksi.
+        if (app()->environment(['local', 'testing'])) {
+            User::query()->firstOrCreate(
+                ['email' => 'test@example.com'],
+                [
+                    'name' => 'Test User',
+                    'password' => 'password',
+                ],
+            );
+        }
     }
 }
