@@ -23,7 +23,7 @@ export default function EditorPage() {
   const viewportRef = useRef(null)
 
   const editor = useDesignEditor(canvasElement)
-  const { resizeCanvas, setPrintArea } = editor
+  const { resizeCanvas, setPrintArea, resetSideDesigns } = editor
 
   const [shirt, setShirt] = useState(null)
   const [shirtLoading, setShirtLoading] = useState(true)
@@ -31,6 +31,7 @@ export default function EditorPage() {
   const [selectedColor, setSelectedColor] = useState('#ffffff')
   const [selectedSize, setSelectedSize] = useState('M')
   const [selectedSide, setSelectedSide] = useState('front')
+  const [isSwitchingSide, setIsSwitchingSide] = useState(false)
   const [projectName, setProjectName] = useState('Desain Saya')
   const [savedProjects, setSavedProjects] = useState([])
   const [activeProjectId, setActiveProjectId] = useState(null)
@@ -49,7 +50,12 @@ export default function EditorPage() {
         const data = await getShirtById(shirtId)
         if (!isMounted) return
 
+        const frontPrintArea = data.print_areas?.find((area) => area.view_side === 'front')
+        await resetSideDesigns(frontPrintArea)
+        if (!isMounted) return
+
         setShirt(data)
+        setSelectedSide('front')
         setActiveProjectId(null)
         setProjectName('Desain Saya')
 
@@ -76,7 +82,7 @@ export default function EditorPage() {
     return () => {
       isMounted = false
     }
-  }, [shirtId])
+  }, [shirtId, resetSideDesigns])
 
   useEffect(() => {
     let isMounted = true
@@ -196,7 +202,7 @@ export default function EditorPage() {
     setProjectMessage('')
 
     try {
-      await editor.restoreCanvas(project.canvasState)
+      await editor.restoreCanvas(project.canvasState, project.selectedSide || 'front')
       setSelectedColor(project.selectedColor || selectedColor)
       setSelectedSize(project.selectedSize || 'M')
       setSelectedSide(project.selectedSide || 'front')
@@ -238,6 +244,33 @@ export default function EditorPage() {
     }
   }
 
+  const handleSideChange = async (nextSide) => {
+    if (
+      !shirt ||
+      nextSide === selectedSide ||
+      isSwitchingSide ||
+      projectBusy
+    ) {
+      return
+    }
+
+    const nextPrintArea = shirt.print_areas?.find(
+      (area) => area.view_side === nextSide
+    )
+
+    setIsSwitchingSide(true)
+
+    try {
+      await editor.switchDesignSide(nextSide, nextPrintArea)
+      setSelectedSide(nextSide)
+    } catch (error) {
+      console.error(error)
+      alert(error.message || 'Gagal mengganti sisi desain.')
+    } finally {
+      setIsSwitchingSide(false)
+    }
+  }
+
   const handleColorChange = (colorHex) => {
     setSelectedColor(colorHex)
 
@@ -274,7 +307,12 @@ export default function EditorPage() {
 
       <EditorToolbar
         editor={editor}
-        exportOptions={{ shirtName: shirt?.name, side: selectedSide, printArea }}
+        exportOptions={{
+          shirtName: shirt?.name,
+          side: selectedSide,
+          printArea,
+          isSwitchingSide,
+        }}
       />
 
       {shirtLoading && (
@@ -373,7 +411,8 @@ export default function EditorPage() {
                   type="button"
                   className={selectedSide === 'front' ? 'selected' : ''}
                   aria-pressed={selectedSide === 'front'}
-                  onClick={() => setSelectedSide('front')}
+                  onClick={() => handleSideChange('front')}
+                  disabled={isSwitchingSide || projectBusy}
                 >
                   Depan
                 </button>
@@ -381,7 +420,8 @@ export default function EditorPage() {
                   type="button"
                   className={selectedSide === 'back' ? 'selected' : ''}
                   aria-pressed={selectedSide === 'back'}
-                  onClick={() => setSelectedSide('back')}
+                  onClick={() => handleSideChange('back')}
+                  disabled={isSwitchingSide || projectBusy}
                 >
                   Belakang
                 </button>
@@ -424,7 +464,7 @@ export default function EditorPage() {
                 type="button"
                 className="project-save-button"
                 onClick={handleSaveProject}
-                disabled={projectBusy}
+                disabled={projectBusy || isSwitchingSide}
               >
                 {projectBusy ? 'Memproses...' : activeProjectId ? 'Simpan Perubahan' : 'Simpan Proyek'}
               </button>
@@ -458,7 +498,7 @@ export default function EditorPage() {
                     <button
                       type="button"
                       onClick={() => handleLoadProject(project)}
-                      disabled={projectBusy}
+                      disabled={projectBusy || isSwitchingSide}
                     >
                       Buka
                     </button>
@@ -466,7 +506,7 @@ export default function EditorPage() {
                       type="button"
                       className="project-delete-button"
                       onClick={() => handleDeleteProject(project.id)}
-                      disabled={projectBusy}
+                      disabled={projectBusy || isSwitchingSide}
                     >
                       Hapus
                     </button>
