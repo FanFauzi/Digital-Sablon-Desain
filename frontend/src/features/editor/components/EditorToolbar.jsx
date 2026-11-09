@@ -2,7 +2,7 @@ export default function EditorToolbar({ editor, exportOptions }) {
   const handleUpload = async (event) => {
     const file = event.target.files?.[0]
 
-    if (!file) return
+    if (!file || exportOptions?.isSwitchingSide) return
 
     try {
       await editor.uploadImage(file)
@@ -22,10 +22,11 @@ export default function EditorToolbar({ editor, exportOptions }) {
           accept="image/png,image/jpeg"
           hidden
           onChange={handleUpload}
+          disabled={exportOptions?.isSwitchingSide}
         />
       </label>
 
-      <button onClick={editor.addText}>
+      <button onClick={editor.addText} disabled={exportOptions?.isSwitchingSide}>
         + Tambah Teks
       </button>
 
@@ -55,6 +56,7 @@ export default function EditorToolbar({ editor, exportOptions }) {
       <button
         type="button"
         className="ai-analysis-button"
+        disabled={exportOptions?.isSwitchingSide}
         onClick={() => {
           editor.analyzeSelectedImage().catch((error) => {
             alert(error.message || 'Pilih gambar terlebih dahulu untuk dianalisis.')
@@ -66,7 +68,7 @@ export default function EditorToolbar({ editor, exportOptions }) {
 
       <button
         onClick={() => editor.rotateSelected(90)}
-        disabled={!editor.selectedObject}
+        disabled={!editor.selectedObject || exportOptions?.isSwitchingSide}
       >
         ↻ Rotate 90°
       </button>
@@ -74,7 +76,7 @@ export default function EditorToolbar({ editor, exportOptions }) {
       <button
         className="delete-button"
         onClick={editor.deleteSelected}
-        disabled={!editor.selectedObject}
+        disabled={!editor.selectedObject || exportOptions?.isSwitchingSide}
       >
         Hapus Objek
       </button>
