@@ -188,6 +188,9 @@ async function imageElementToDataUrl(element) {
 export default function useDesignEditor(canvasElement) {
   const canvasRef = useRef(null)
   const printAreaRef = useRef({ ...EDITOR_CONFIG.printArea })
+  const activeSideRef = useRef('front')
+  const sideSnapshotsRef = useRef({ front: null, back: null })
+  const isSwitchingSideRef = useRef(false)
 
   const [selectedObject, setSelectedObject] = useState(null)
   const [layers, setLayers] = useState([])
@@ -518,7 +521,7 @@ export default function useDesignEditor(canvasElement) {
     refreshDesignPreview()
   }, [refreshDesignPreview])
 
-  const serializeCanvas = useCallback(async () => {
+  const serializeCurrentCanvas = useCallback(async () => {
     const canvas = canvasRef.current
 
     if (!canvas) {
@@ -543,31 +546,137 @@ export default function useDesignEditor(canvasElement) {
         return serialized
       })
     )
+    snapshot.background = '#ffffff'
 
     return snapshot
   }, [])
 
-  const restoreCanvas = useCallback(async (snapshot) => {
+  const applyCanvasSnapshot = useCallback(async (snapshot) => {
     const canvas = canvasRef.current
 
-    if (!canvas || !snapshot || !Array.isArray(snapshot.objects)) {
-      throw new Error('Data proyek tidak valid atau kanvas belum siap.')
+    if (!canvas) {
+      throw new Error('Kanvas desain belum siap.')
     }
 
     canvas.discardActiveObject()
     canvas.clear()
-    await canvas.loadFromJSON(snapshot)
+
+    if (snapshot) {
+      if (!Array.isArray(snapshot.objects)) {
+        throw new Error('Data desain pada sisi ini tidak valid.')
+      }
+
+      await canvas.loadFromJSON(snapshot)
+    }
+
+    canvas.backgroundColor = '#ffffff'
 
     const boundary = createPrintBoundary(printAreaRef.current)
     canvas.add(boundary)
     canvas.sendObjectToBack(boundary)
-    canvas.backgroundColor = '#ffffff'
     canvas.requestRenderAll()
 
     setSelectedObject(null)
     refreshLayers()
     refreshDesignPreview()
   }, [refreshDesignPreview, refreshLayers])
+
+  // Format proyek versi 2 menyimpan canvas depan dan belakang secara terpisah.
+  const serializeCanvas = useCallback(async () => {
+    const activeSide = activeSideRef.current
+    const activeSnapshot = await serializeCurrentCanvas()
+    const sides = {
+      ...sideSnapshotsRef.current,
+      [activeSide]: activeSnapshot,
+    }
+
+    sideSnapshotsRef.current = sides
+
+    return {
+      schemaVersion: 2,
+      activeSide,
+      sides,
+    }
+  }, [serializeCurrentCanvas])
+
+  // Tetap mendukung proyek lama yang hanya menyimpan satu snapshot canvas.
+  const restoreCanvas = useCallback(async (snapshot, preferredSide = 'front') => {
+    if (!snapshot || !Array.isArray(snapshot.objects) && snapshot.schemaVersion !== 2) {
+      throw new Error('Data proyek tidak valid atau kanvas belum siap.')
+    }
+
+    const requestedSide = preferredSide === 'back' ? 'back' : 'front'
+
+    if (snapshot.schemaVersion === 2 && snapshot.sides) {
+      sideSnapshotsRef.current = {
+        front: snapshot.sides.front || null,
+        back: snapshot.sides.back || null,
+      }
+      activeSideRef.current =
+        snapshot.activeSide === 'back' || requestedSide === 'back'
+          ? requestedSide
+          : 'front'
+    } else {
+      sideSnapshotsRef.current = { front: null, back: null }
+      sideSnapshotsRef.current[requestedSide] = snapshot
+      activeSideRef.current = requestedSide
+    }
+
+    await applyCanvasSnapshot(sideSnapshotsRef.current[activeSideRef.current])
+  }, [applyCanvasSnapshot])
+
+  const switchDesignSide = useCallback(async (nextSide, printAreaData) => {
+    if (nextSide !== 'front' && nextSide !== 'back') {
+      throw new Error('Sisi desain tidak dikenal.')
+    }
+
+    if (isSwitchingSideRef.current) return false
+
+    if (nextSide === activeSideRef.current) {
+      if (printAreaData) setPrintArea(printAreaData)
+      return true
+    }
+
+    const previousSide = activeSideRef.current
+    let previousSnapshot = null
+    isSwitchingSideRef.current = true
+
+    try {
+      previousSnapshot = await serializeCurrentCanvas()
+      sideSnapshotsRef.current = {
+        ...sideSnapshotsRef.current,
+        [previousSide]: previousSnapshot,
+      }
+
+      activeSideRef.current = nextSide
+      await applyCanvasSnapshot(sideSnapshotsRef.current[nextSide])
+
+      if (printAreaData) setPrintArea(printAreaData)
+      return true
+    } catch (error) {
+      // Jika pemuatan sisi tujuan gagal, kembalikan canvas ke sisi sebelumnya.
+      if (previousSnapshot) {
+        activeSideRef.current = previousSide
+        sideSnapshotsRef.current = {
+          ...sideSnapshotsRef.current,
+          [previousSide]: previousSnapshot,
+        }
+        await applyCanvasSnapshot(previousSnapshot)
+      }
+
+      throw error
+    } finally {
+      isSwitchingSideRef.current = false
+    }
+  }, [applyCanvasSnapshot, serializeCurrentCanvas, setPrintArea])
+
+  const resetSideDesigns = useCallback(async (frontPrintArea) => {
+    sideSnapshotsRef.current = { front: null, back: null }
+    activeSideRef.current = 'front'
+    await applyCanvasSnapshot(null)
+
+    if (frontPrintArea) setPrintArea(frontPrintArea)
+  }, [applyCanvasSnapshot, setPrintArea])
 
   const [analysis, setAnalysis] = useState(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
@@ -778,6 +887,8 @@ return {
   setPrintArea,
   serializeCanvas,
   restoreCanvas,
+  switchDesignSide,
+  resetSideDesigns,
   isAnalyzing,
   analysisError,
   analyzeSelectedImage,
