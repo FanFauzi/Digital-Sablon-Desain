@@ -73,9 +73,11 @@ function ArtworkTexture({ src }) {
     return preparedTexture
   }, [loadedTexture])
 
+  const aspectRatio = loadedTexture.image?.width / loadedTexture.image?.height || 0.8
+
   return (
     <mesh position={[0, -0.02, 0.105]}>
-      <planeGeometry args={[0.59, 0.73]} />
+      <planeGeometry args={[0.59, 0.59 / aspectRatio]} />
       <meshBasicMaterial
         map={texture}
         transparent
