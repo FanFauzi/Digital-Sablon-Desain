@@ -95,7 +95,7 @@ export default function EditorPage() {
       .catch((error) => {
         console.error(error)
         if (isMounted) {
-          setProjectMessage('Penyimpanan proyek lokal tidak dapat dibuka.')
+          setProjectMessage('Daftar proyek gagal dimuat. Periksa koneksi server dan sesi akun.')
           setProjectMessageType('error')
         }
       })
@@ -457,7 +457,7 @@ export default function EditorPage() {
         <section className="project-manager">
           <div className="project-manager-header">
             <div>
-              <span className="eyebrow">LOCAL PROJECTS</span>
+              <span className="eyebrow">SAVED PROJECTS</span>
               <h2>Simpan & Buka Desain</h2>
               <p>Proyek akun tersimpan di server dan dapat dibuka dari perangkat lain. Proyek lokal lama tetap tersedia sebagai cadangan.</p>
             </div>
