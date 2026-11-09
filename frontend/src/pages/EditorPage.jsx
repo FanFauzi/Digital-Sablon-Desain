@@ -4,6 +4,11 @@ import { useParams } from 'react-router-dom'
 import useDesignEditor from '../features/editor/hooks/useDesignEditor'
 import { EDITOR_CONFIG } from '../features/editor/utils/editorConfig'
 import { getShirtById } from '../services/shirtService'
+import {
+  deleteLocalProject,
+  getSavedProjects,
+  saveLocalProject,
+} from '../services/projectStorage'
 
 import EditorToolbar from '../features/editor/components/EditorToolbar'
 import PropertiesPanel from '../features/editor/components/PropertiesPanel'
@@ -26,6 +31,12 @@ export default function EditorPage() {
   const [selectedColor, setSelectedColor] = useState('#ffffff')
   const [selectedSize, setSelectedSize] = useState('M')
   const [selectedSide, setSelectedSide] = useState('front')
+  const [projectName, setProjectName] = useState('Desain Saya')
+  const [savedProjects, setSavedProjects] = useState([])
+  const [activeProjectId, setActiveProjectId] = useState(null)
+  const [projectBusy, setProjectBusy] = useState(false)
+  const [projectMessage, setProjectMessage] = useState('')
+  const [projectMessageType, setProjectMessageType] = useState('success')
 
   useEffect(() => {
     let isMounted = true
@@ -59,6 +70,26 @@ export default function EditorPage() {
     }
 
     loadShirt()
+
+    return () => {
+      isMounted = false
+    }
+  }, [shirtId])
+
+  useEffect(() => {
+    let isMounted = true
+
+    getSavedProjects(shirtId)
+      .then((projects) => {
+        if (isMounted) setSavedProjects(projects)
+      })
+      .catch((error) => {
+        console.error(error)
+        if (isMounted) {
+          setProjectMessage('Penyimpanan proyek lokal tidak dapat dibuka.')
+          setProjectMessageType('error')
+        }
+      })
 
     return () => {
       isMounted = false
@@ -118,6 +149,88 @@ export default function EditorPage() {
   const printArea = shirt?.print_areas?.find(
     (area) => area.view_side === selectedSide
   )
+
+  const handleSaveProject = async () => {
+    if (!shirt || projectBusy) return
+
+    setProjectBusy(true)
+    setProjectMessage('')
+
+    try {
+      const canvasState = await editor.serializeCanvas()
+      const saved = await saveLocalProject({
+        id: activeProjectId || undefined,
+        shirtId,
+        shirtName: shirt.name,
+        name: projectName.trim() || `Desain ${shirt.name}`,
+        selectedColor,
+        selectedSize,
+        selectedSide,
+        canvasState,
+      })
+
+      setActiveProjectId(saved.id)
+      setProjectName(saved.name)
+      setSavedProjects(await getSavedProjects(shirtId))
+      setProjectMessage('Proyek berhasil disimpan di browser ini.')
+      setProjectMessageType('success')
+    } catch (error) {
+      console.error(error)
+      setProjectMessage(error.message || 'Gagal menyimpan proyek.')
+      setProjectMessageType('error')
+    } finally {
+      setProjectBusy(false)
+    }
+  }
+
+  const handleLoadProject = async (project) => {
+    if (projectBusy) return
+
+    setProjectBusy(true)
+    setProjectMessage('')
+
+    try {
+      await editor.restoreCanvas(project.canvasState)
+      setSelectedColor(project.selectedColor || selectedColor)
+      setSelectedSize(project.selectedSize || 'M')
+      setSelectedSide(project.selectedSide || 'front')
+      setProjectName(project.name || 'Desain Saya')
+      setActiveProjectId(project.id)
+      setProjectMessage(`Proyek "${project.name}" berhasil dibuka.`)
+      setProjectMessageType('success')
+    } catch (error) {
+      console.error(error)
+      setProjectMessage(error.message || 'Gagal membuka proyek.')
+      setProjectMessageType('error')
+    } finally {
+      setProjectBusy(false)
+    }
+  }
+
+  const handleDeleteProject = async (projectId) => {
+    if (projectBusy) return
+
+    setProjectBusy(true)
+    setProjectMessage('')
+
+    try {
+      await deleteLocalProject(projectId)
+      setSavedProjects(await getSavedProjects(shirtId))
+
+      if (activeProjectId === projectId) {
+        setActiveProjectId(null)
+      }
+
+      setProjectMessage('Proyek berhasil dihapus dari browser ini.')
+      setProjectMessageType('success')
+    } catch (error) {
+      console.error(error)
+      setProjectMessage(error.message || 'Gagal menghapus proyek.')
+      setProjectMessageType('error')
+    } finally {
+      setProjectBusy(false)
+    }
+  }
 
   const handleColorChange = (colorHex) => {
     setSelectedColor(colorHex)
@@ -276,6 +389,83 @@ export default function EditorPage() {
               </div>
             )}
           </aside>
+        </section>
+      )}
+
+      {shirt && (
+        <section className="project-manager">
+          <div className="project-manager-header">
+            <div>
+              <span className="eyebrow">LOCAL PROJECTS</span>
+              <h2>Simpan & Buka Desain</h2>
+              <p>Desain tersimpan di browser dan perangkat ini.</p>
+            </div>
+            <div className="project-save-controls">
+              <label className="project-name-field">
+                <span>Nama proyek</span>
+                <input
+                  type="text"
+                  value={projectName}
+                  maxLength={100}
+                  onChange={(event) => setProjectName(event.target.value)}
+                  placeholder="Contoh: Kaos Komunitas"
+                />
+              </label>
+              <button
+                type="button"
+                className="project-save-button"
+                onClick={handleSaveProject}
+                disabled={projectBusy}
+              >
+                {projectBusy ? 'Memproses...' : activeProjectId ? 'Simpan Perubahan' : 'Simpan Proyek'}
+              </button>
+            </div>
+          </div>
+
+          {projectMessage && (
+            <p
+              className={`project-feedback ${projectMessageType === 'error' ? 'error' : 'success'}`}
+              role="status"
+            >
+              {projectMessage}
+            </p>
+          )}
+
+          <div className="saved-project-list">
+            {savedProjects.length === 0 ? (
+              <p className="saved-project-empty">Belum ada proyek tersimpan untuk produk ini.</p>
+            ) : (
+              savedProjects.map((project) => (
+                <article className="saved-project-item" key={project.id}>
+                  <div className="saved-project-info">
+                    <strong>{project.name}</strong>
+                    <span>
+                      {new Date(project.updatedAt).toLocaleString('id-ID')}
+                      {project.selectedColor ? ` · ${project.selectedColor}` : ''}
+                      {project.selectedSize ? ` · Size ${project.selectedSize}` : ''}
+                    </span>
+                  </div>
+                  <div className="saved-project-actions">
+                    <button
+                      type="button"
+                      onClick={() => handleLoadProject(project)}
+                      disabled={projectBusy}
+                    >
+                      Buka
+                    </button>
+                    <button
+                      type="button"
+                      className="project-delete-button"
+                      onClick={() => handleDeleteProject(project.id)}
+                      disabled={projectBusy}
+                    >
+                      Hapus
+                    </button>
+                  </div>
+                </article>
+              ))
+            )}
+          </div>
         </section>
       )}
 
