@@ -23,7 +23,7 @@ export default function EditorPage() {
   const viewportRef = useRef(null)
 
   const editor = useDesignEditor(canvasElement)
-  const { resizeCanvas } = editor
+  const { resizeCanvas, setPrintArea } = editor
 
   const [shirt, setShirt] = useState(null)
   const [shirtLoading, setShirtLoading] = useState(true)
@@ -152,6 +152,10 @@ export default function EditorPage() {
     (area) => area.view_side === selectedSide
   )
 
+  useEffect(() => {
+    if (printArea) setPrintArea(printArea)
+  }, [printArea, setPrintArea])
+
   const handleSaveProject = async () => {
     if (!shirt || projectBusy) return
 
@@ -268,7 +272,10 @@ export default function EditorPage() {
         </div>
       </div>
 
-      <EditorToolbar editor={editor} />
+      <EditorToolbar
+        editor={editor}
+        exportOptions={{ shirtName: shirt?.name, side: selectedSide, printArea }}
+      />
 
       {shirtLoading && (
         <div className="configurator-message">Memuat detail produk...</div>
