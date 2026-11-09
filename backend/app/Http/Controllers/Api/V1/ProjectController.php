@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
-use App\Models\Project;
 use App\Models\ShirtVariant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
