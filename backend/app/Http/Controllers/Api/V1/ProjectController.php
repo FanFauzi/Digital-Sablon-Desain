@@ -57,7 +57,14 @@ class ProjectController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Proyek berhasil disimpan ke server.',
-            'data' => $project,
+            'data' => $project->only([
+                'id',
+                'name',
+                'status',
+                'shirt_variant_id',
+                'canvas_config',
+                'updated_at',
+            ]),
         ], 201);
     }
 
@@ -76,7 +83,14 @@ class ProjectController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Perubahan proyek berhasil disimpan.',
-            'data' => $record->refresh(),
+            'data' => $record->refresh()->only([
+                'id',
+                'name',
+                'status',
+                'shirt_variant_id',
+                'canvas_config',
+                'updated_at',
+            ]),
         ]);
     }
 
