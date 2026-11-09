@@ -31,7 +31,7 @@ export default function EditorToolbar({ editor, exportOptions }) {
 
       <button
         type="button"
-        disabled={!exportOptions?.printArea}
+        disabled={!exportOptions?.printArea || exportOptions?.isSwitchingSide}
         onClick={async () => {
           try {
             const result = await editor.exportDesign(exportOptions)
