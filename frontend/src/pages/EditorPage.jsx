@@ -50,6 +50,8 @@ export default function EditorPage() {
         if (!isMounted) return
 
         setShirt(data)
+        setActiveProjectId(null)
+        setProjectName('Desain Saya')
 
         const firstVariant =
           data.variants?.find((variant) => variant.size === 'M') ||
