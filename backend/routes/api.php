@@ -34,6 +34,7 @@ Route::prefix('v1')->group(function () {
 
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('/projects', [ProjectController::class, 'index']);
+        Route::get('/projects/{project}', [ProjectController::class, 'show'])->whereNumber('project');
         Route::post('/projects', [ProjectController::class, 'store']);
         Route::put('/projects/{project}', [ProjectController::class, 'update'])
             ->whereNumber('project');
