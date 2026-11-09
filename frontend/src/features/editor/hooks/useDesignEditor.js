@@ -601,21 +601,25 @@ export default function useDesignEditor(canvasElement) {
 
   // Tetap mendukung proyek lama yang hanya menyimpan satu snapshot canvas.
   const restoreCanvas = useCallback(async (snapshot, preferredSide = 'front') => {
-    if (!snapshot || !Array.isArray(snapshot.objects) && snapshot.schemaVersion !== 2) {
+    const isMultiSideSnapshot = snapshot?.schemaVersion === 2
+
+    if (
+      !snapshot ||
+      (isMultiSideSnapshot
+        ? !snapshot.sides || typeof snapshot.sides !== 'object'
+        : !Array.isArray(snapshot.objects))
+    ) {
       throw new Error('Data proyek tidak valid atau kanvas belum siap.')
     }
 
     const requestedSide = preferredSide === 'back' ? 'back' : 'front'
 
-    if (snapshot.schemaVersion === 2 && snapshot.sides) {
+    if (isMultiSideSnapshot) {
       sideSnapshotsRef.current = {
         front: snapshot.sides.front || null,
         back: snapshot.sides.back || null,
       }
-      activeSideRef.current =
-        snapshot.activeSide === 'back' || requestedSide === 'back'
-          ? requestedSide
-          : 'front'
+      activeSideRef.current = requestedSide
     } else {
       sideSnapshotsRef.current = { front: null, back: null }
       sideSnapshotsRef.current[requestedSide] = snapshot
