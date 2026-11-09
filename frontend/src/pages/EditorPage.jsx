@@ -5,10 +5,11 @@ import useDesignEditor from '../features/editor/hooks/useDesignEditor'
 import { EDITOR_CONFIG } from '../features/editor/utils/editorConfig'
 import { getShirtById } from '../services/shirtService'
 import {
-  deleteLocalProject,
-  getSavedProjects,
-  saveLocalProject,
-} from '../services/projectStorage'
+  deleteEditorProject,
+  getEditorProjects,
+  loadEditorProject,
+  saveEditorProject,
+} from '../services/projectService'
 
 import EditorToolbar from '../features/editor/components/EditorToolbar'
 import PropertiesPanel from '../features/editor/components/PropertiesPanel'
@@ -87,7 +88,7 @@ export default function EditorPage() {
   useEffect(() => {
     let isMounted = true
 
-    getSavedProjects(shirtId)
+    getEditorProjects(shirtId)
       .then((projects) => {
         if (isMounted) setSavedProjects(projects)
       })
@@ -170,21 +171,23 @@ export default function EditorPage() {
 
     try {
       const canvasState = await editor.serializeCanvas()
-      const saved = await saveLocalProject({
-        id: activeProjectId || undefined,
-        shirtId,
-        shirtName: shirt.name,
+      const saved = await saveEditorProject(activeProjectId, {
         name: projectName.trim() || `Desain ${shirt.name}`,
-        selectedColor,
-        selectedSize,
-        selectedSide,
-        canvasState,
+        shirt_variant_id: selectedVariant?.id || null,
+        canvas_config: {
+          shirt_id: Number(shirtId),
+          shirt_name: shirt.name,
+          selected_color: selectedColor,
+          selected_size: selectedSize,
+          selected_side: selectedSide,
+        },
+        editor_state: canvasState,
       })
 
       setActiveProjectId(saved.id)
       setProjectName(saved.name)
-      setSavedProjects(await getSavedProjects(shirtId))
-      setProjectMessage('Proyek berhasil disimpan di browser ini.')
+      setSavedProjects(await getEditorProjects(shirtId))
+      setProjectMessage('Proyek berhasil disimpan ke akun.')
       setProjectMessageType('success')
     } catch (error) {
       console.error(error)
@@ -202,13 +205,17 @@ export default function EditorPage() {
     setProjectMessage('')
 
     try {
-      await editor.restoreCanvas(project.canvasState, project.selectedSide || 'front')
-      setSelectedColor(project.selectedColor || selectedColor)
-      setSelectedSize(project.selectedSize || 'M')
-      setSelectedSide(project.selectedSide || 'front')
-      setProjectName(project.name || 'Desain Saya')
+      const loadedProject = await loadEditorProject(project)
+      await editor.restoreCanvas(
+        loadedProject.canvasState,
+        loadedProject.selectedSide || 'front'
+      )
+      setSelectedColor(loadedProject.selectedColor || selectedColor)
+      setSelectedSize(loadedProject.selectedSize || 'M')
+      setSelectedSide(loadedProject.selectedSide || 'front')
+      setProjectName(loadedProject.name || 'Desain Saya')
       setActiveProjectId(project.id)
-      setProjectMessage(`Proyek "${project.name}" berhasil dibuka.`)
+      setProjectMessage(`Proyek "${loadedProject.name}" berhasil dibuka.`)
       setProjectMessageType('success')
     } catch (error) {
       console.error(error)
@@ -219,21 +226,25 @@ export default function EditorPage() {
     }
   }
 
-  const handleDeleteProject = async (projectId) => {
+  const handleDeleteProject = async (project) => {
     if (projectBusy || isSwitchingSide) return
 
     setProjectBusy(true)
     setProjectMessage('')
 
     try {
-      await deleteLocalProject(projectId)
-      setSavedProjects(await getSavedProjects(shirtId))
+      await deleteEditorProject(project)
+      setSavedProjects(await getEditorProjects(shirtId))
 
-      if (activeProjectId === projectId) {
+      if (activeProjectId === project.id) {
         setActiveProjectId(null)
       }
 
-      setProjectMessage('Proyek berhasil dihapus dari browser ini.')
+      setProjectMessage(
+        project.storageType === 'cloud'
+          ? 'Proyek berhasil dihapus dari akun.'
+          : 'Proyek lokal berhasil dihapus dari browser.'
+      )
       setProjectMessageType('success')
     } catch (error) {
       console.error(error)
@@ -448,7 +459,7 @@ export default function EditorPage() {
             <div>
               <span className="eyebrow">LOCAL PROJECTS</span>
               <h2>Simpan & Buka Desain</h2>
-              <p>Desain tersimpan di browser dan perangkat ini.</p>
+              <p>Proyek akun tersimpan di server dan dapat dibuka dari perangkat lain. Proyek lokal lama tetap tersedia sebagai cadangan.</p>
             </div>
             <div className="project-save-controls">
               <label className="project-name-field">
@@ -491,6 +502,7 @@ export default function EditorPage() {
                     <strong>{project.name}</strong>
                     <span>
                       {new Date(project.updatedAt).toLocaleString('id-ID')}
+                      {project.storageType === 'cloud' ? ' · Akun' : ' · Lokal'}
                       {project.selectedColor ? ` · ${project.selectedColor}` : ''}
                       {project.selectedSize ? ` · Size ${project.selectedSize}` : ''}
                     </span>
@@ -506,7 +518,7 @@ export default function EditorPage() {
                     <button
                       type="button"
                       className="project-delete-button"
-                      onClick={() => handleDeleteProject(project.id)}
+                      onClick={() => handleDeleteProject(project)}
                       disabled={projectBusy || isSwitchingSide}
                     >
                       Hapus
