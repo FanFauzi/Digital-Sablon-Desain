@@ -1,4 +1,4 @@
-export default function EditorToolbar({ editor }) {
+export default function EditorToolbar({ editor, exportOptions }) {
   const handleUpload = async (event) => {
     const file = event.target.files?.[0]
 
@@ -29,14 +29,27 @@ export default function EditorToolbar({ editor }) {
         + Tambah Teks
       </button>
 
-      <button onClick={() => {
-        try {
-          editor.exportDesign()
-        } catch (error) {
-          alert(error.message || 'Gagal mengekspor desain.')
-        }
-      }}>
-        ↓ Export PNG
+      <button
+        type="button"
+        disabled={!exportOptions?.printArea}
+        onClick={async () => {
+          try {
+            const result = await editor.exportDesign(exportOptions)
+            const clippingMessage = result.warningCount > 0
+              ? `\\nPeringatan: ${result.warningCount} objek berada di luar batas area cetak dan akan terpotong.`
+              : ''
+
+            alert(
+              `PNG siap diunduh: ${result.pixelWidth} × ${result.pixelHeight} px\\n` +
+              `${result.physicalWidthCm} × ${result.physicalHeightCm} cm @ ${result.dpi} DPI` +
+              clippingMessage
+            )
+          } catch (error) {
+            alert(error.message || 'Gagal mengekspor desain.')
+          }
+        }}
+      >
+        ↓ Export PNG 300 DPI
       </button>
 
       <button
