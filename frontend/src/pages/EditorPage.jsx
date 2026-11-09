@@ -163,7 +163,7 @@ export default function EditorPage() {
   }, [printArea, setPrintArea])
 
   const handleSaveProject = async () => {
-    if (!shirt || projectBusy) return
+    if (!shirt || projectBusy || isSwitchingSide) return
 
     setProjectBusy(true)
     setProjectMessage('')
@@ -196,7 +196,7 @@ export default function EditorPage() {
   }
 
   const handleLoadProject = async (project) => {
-    if (projectBusy) return
+    if (projectBusy || isSwitchingSide) return
 
     setProjectBusy(true)
     setProjectMessage('')
@@ -220,7 +220,7 @@ export default function EditorPage() {
   }
 
   const handleDeleteProject = async (projectId) => {
-    if (projectBusy) return
+    if (projectBusy || isSwitchingSide) return
 
     setProjectBusy(true)
     setProjectMessage('')
