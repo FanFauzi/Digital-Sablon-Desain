@@ -33,6 +33,16 @@ class ProjectController extends Controller
         ]);
     }
 
+    public function show(Request $request, int $project): JsonResponse
+    {
+        $record = $request->user()->projects()->findOrFail($project);
+
+        return response()->json([
+            'success' => true,
+            'data' => $record,
+        ]);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $validated = $this->validateProject($request);
