@@ -9,12 +9,12 @@ import {
 import { EDITOR_CONFIG } from '../utils/editorConfig'
 import api from '../../../services/api'
 
-function createPrintBoundary() {
+function createPrintBoundary(printArea = EDITOR_CONFIG.printArea) {
   const boundary = new Rect({
-    left: EDITOR_CONFIG.printArea.left,
-    top: EDITOR_CONFIG.printArea.top,
-    width: EDITOR_CONFIG.printArea.width,
-    height: EDITOR_CONFIG.printArea.height,
+    left: printArea.left,
+    top: printArea.top,
+    width: printArea.width,
+    height: printArea.height,
     originX: 'left',
     originY: 'top',
     fill: 'rgba(0, 0, 0, 0)',
@@ -28,6 +28,140 @@ function createPrintBoundary() {
 
   boundary.isPrintBoundary = true
   return boundary
+}
+
+
+const PNG_SIGNATURE = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])
+
+function createCrc32Table() {
+  const table = new Uint32Array(256)
+
+  for (let value = 0; value < 256; value++) {
+    let crc = value
+
+    for (let bit = 0; bit < 8; bit++) {
+      crc = (crc & 1) ? (0xedb88320 ^ (crc >>> 1)) : (crc >>> 1)
+    }
+
+    table[value] = crc >>> 0
+  }
+
+  return table
+}
+
+const CRC32_TABLE = createCrc32Table()
+
+function calculateCrc32(bytes) {
+  let crc = 0xffffffff
+
+  for (const byte of bytes) {
+    crc = CRC32_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8)
+  }
+
+  return (crc ^ 0xffffffff) >>> 0
+}
+
+function writeUint32BigEndian(view, offset, value) {
+  view.setUint32(offset, value >>> 0, false)
+}
+
+function createPhysChunk(dpi) {
+  const pixelsPerMeter = Math.round(dpi / 0.0254)
+  const chunk = new Uint8Array(21)
+  const view = new DataView(chunk.buffer)
+
+  writeUint32BigEndian(view, 0, 9)
+  chunk.set([112, 72, 89, 115], 4) // pHYs
+
+  writeUint32BigEndian(view, 8, pixelsPerMeter)
+  writeUint32BigEndian(view, 12, pixelsPerMeter)
+  chunk[16] = 1 // pixels per meter
+
+  const crcInput = chunk.subarray(4, 17)
+  writeUint32BigEndian(view, 17, calculateCrc32(crcInput))
+
+  return chunk
+}
+
+async function addPngDpiMetadata(blob, dpi) {
+  const source = new Uint8Array(await blob.arrayBuffer())
+
+  if (source.length < 8 || !PNG_SIGNATURE.every((value, index) => source[index] === value)) {
+    throw new Error('Hasil ekspor bukan file PNG yang valid.')
+  }
+
+  const chunks = []
+  let offset = 8
+  let insertedPhys = false
+
+  while (offset + 12 <= source.length) {
+    const view = new DataView(source.buffer, source.byteOffset + offset, source.length - offset)
+    const dataLength = view.getUint32(0, false)
+    const chunkEnd = offset + 12 + dataLength
+
+    if (chunkEnd > source.length) {
+      throw new Error('Struktur PNG hasil ekspor tidak lengkap.')
+    }
+
+    const type = String.fromCharCode(
+      source[offset + 4],
+      source[offset + 5],
+      source[offset + 6],
+      source[offset + 7]
+    )
+
+    if (type === 'pHYs') {
+      offset = chunkEnd
+      continue
+    }
+
+    if (type === 'IDAT' && !insertedPhys) {
+      chunks.push(createPhysChunk(dpi))
+      insertedPhys = true
+    }
+
+    chunks.push(source.slice(offset, chunkEnd))
+    offset = chunkEnd
+
+    if (type === 'IEND') break
+  }
+
+  if (!insertedPhys) {
+    throw new Error('PNG tidak memiliki data gambar yang dapat diekspor.')
+  }
+
+  return new Blob([PNG_SIGNATURE, ...chunks], { type: 'image/png' })
+}
+
+function fitPrintAreaToPhysicalRatio(physicalWidthCm, physicalHeightCm) {
+  const base = EDITOR_CONFIG.printArea
+  const widthCm = Number(physicalWidthCm)
+  const heightCm = Number(physicalHeightCm)
+
+  if (!Number.isFinite(widthCm) || !Number.isFinite(heightCm) || widthCm <= 0 || heightCm <= 0) {
+    return { ...base }
+  }
+
+  const targetRatio = widthCm / heightCm
+  const maxRatio = base.width / base.height
+
+  let width
+  let height
+
+  if (targetRatio >= maxRatio) {
+    width = base.width
+    height = width / targetRatio
+  } else {
+    height = base.height
+    width = height * targetRatio
+  }
+
+  return {
+    left: base.left + (base.width - width) / 2,
+    top: base.top + (base.height - height) / 2,
+    width,
+    height,
+  }
 }
 
 async function imageElementToDataUrl(element) {
@@ -53,6 +187,7 @@ async function imageElementToDataUrl(element) {
 
 export default function useDesignEditor(canvasElement) {
   const canvasRef = useRef(null)
+  const printAreaRef = useRef({ ...EDITOR_CONFIG.printArea })
 
   const [selectedObject, setSelectedObject] = useState(null)
   const [layers, setLayers] = useState([])
@@ -97,7 +232,7 @@ export default function useDesignEditor(canvasElement) {
     const canvas = canvasRef.current
     if (!canvas) return
 
-    const { left, top, width, height } = EDITOR_CONFIG.printArea
+    const { left, top, width, height } = printAreaRef.current
     const previousBackground = canvas.backgroundColor
 
     try {
@@ -132,7 +267,7 @@ export default function useDesignEditor(canvasElement) {
 
     canvasRef.current = canvas
 
-    const boundary = createPrintBoundary()
+    const boundary = createPrintBoundary(printAreaRef.current)
 
     canvas.add(boundary)
     canvas.sendObjectToBack(boundary)
@@ -361,6 +496,28 @@ export default function useDesignEditor(canvasElement) {
     refreshDesignPreview()
   }, [refreshDesignPreview, syncSelectedObject])
 
+  const setPrintArea = useCallback((printAreaData) => {
+    const canvas = canvasRef.current
+
+    if (!canvas || !printAreaData) return
+
+    const fittedArea = fitPrintAreaToPhysicalRatio(
+      printAreaData.physical_width_cm,
+      printAreaData.physical_height_cm
+    )
+
+    printAreaRef.current = fittedArea
+
+    const boundary = canvas.getObjects().find((object) => object.isPrintBoundary)
+    if (boundary) {
+      boundary.set(fittedArea)
+      boundary.setCoords()
+    }
+
+    canvas.requestRenderAll()
+    refreshDesignPreview()
+  }, [refreshDesignPreview])
+
   const serializeCanvas = useCallback(async () => {
     const canvas = canvasRef.current
 
@@ -401,7 +558,7 @@ export default function useDesignEditor(canvasElement) {
     canvas.clear()
     await canvas.loadFromJSON(snapshot)
 
-    const boundary = createPrintBoundary()
+    const boundary = createPrintBoundary(printAreaRef.current)
     canvas.add(boundary)
     canvas.sendObjectToBack(boundary)
     canvas.backgroundColor = '#ffffff'
@@ -462,37 +619,128 @@ export default function useDesignEditor(canvasElement) {
     }
   }, [])
 
-  const exportDesign = useCallback(() => {
+  const exportDesign = useCallback(async (options = {}) => {
     const canvas = canvasRef.current
 
     if (!canvas) {
       throw new Error('Kanvas desain belum siap.')
     }
 
-    const { left, top, width, height } = EDITOR_CONFIG.printArea
+    const { printArea, shirtName = 'desain', side = 'front' } = options
+    const physicalWidthCm = Number(printArea?.physical_width_cm)
+    const physicalHeightCm = Number(printArea?.physical_height_cm)
+    const dpi = Number(printArea?.dpi) || 300
+
+    if (
+      !Number.isFinite(physicalWidthCm) ||
+      !Number.isFinite(physicalHeightCm) ||
+      physicalWidthCm <= 0 ||
+      physicalHeightCm <= 0
+    ) {
+      throw new Error('Informasi ukuran fisik area cetak belum tersedia untuk produk ini.')
+    }
+
+    if (!Number.isFinite(dpi) || dpi < 72 || dpi > 600) {
+      throw new Error('DPI ekspor harus berada di antara 72 dan 600.')
+    }
+
+    const designObjects = canvas.getObjects().filter((object) => !object.isPrintBoundary)
+
+    if (designObjects.length === 0) {
+      throw new Error('Tambahkan gambar atau teks sebelum mengekspor desain.')
+    }
+
+    const { left, top, width, height } = printAreaRef.current
+    const pixelWidth = Math.round((physicalWidthCm / 2.54) * dpi)
+    const pixelHeight = Math.round((physicalHeightCm / 2.54) * dpi)
+    const totalPixels = pixelWidth * pixelHeight
+
+    // Hindari alokasi canvas yang terlalu besar dan berisiko membuat tab browser kehabisan memori.
+    if (pixelWidth > 10000 || pixelHeight > 10000 || totalPixels > 40000000) {
+      throw new Error(
+        'Resolusi ekspor terlalu besar untuk browser ini. Gunakan DPI maksimal 300 atau kurangi ukuran cetak.'
+      )
+    }
+
+    const clippingWarnings = designObjects.filter((object) => {
+      const bounds = object.getBoundingRect()
+
+      return (
+        bounds.left < left ||
+        bounds.top < top ||
+        bounds.left + bounds.width > left + width ||
+        bounds.top + bounds.height > top + height
+      )
+    })
+
     const previousBackground = canvas.backgroundColor
 
     try {
-      // Hasil ekspor hanya area cetak, tanpa latar putih editor.
+      canvas.discardActiveObject()
       canvas.backgroundColor = ''
       canvas.requestRenderAll()
 
-      const dataUrl = canvas.toDataURL({
+      // Gunakan skala seragam berdasarkan lebar fisik; area cetak telah
+      // disesuaikan ke rasio fisik agar gambar tidak tertarik atau gepeng.
+      const multiplier = pixelWidth / width
+      const croppedDataUrl = canvas.toDataURL({
         format: 'png',
         left,
         top,
         width,
         height,
-        multiplier: 1,
+        multiplier,
         enableRetinaScaling: false,
       })
 
+      const sourceImage = new Image()
+      sourceImage.src = croppedDataUrl
+      await sourceImage.decode()
+
+      const outputCanvas = document.createElement('canvas')
+      outputCanvas.width = pixelWidth
+      outputCanvas.height = pixelHeight
+
+      const context = outputCanvas.getContext('2d')
+      if (!context) {
+        throw new Error('Browser tidak dapat menyiapkan kanvas ekspor.')
+      }
+
+      context.clearRect(0, 0, pixelWidth, pixelHeight)
+      context.drawImage(sourceImage, 0, 0, pixelWidth, pixelHeight)
+
+      const renderedBlob = await new Promise((resolve, reject) => {
+        outputCanvas.toBlob((blob) => {
+          if (blob) resolve(blob)
+          else reject(new Error('Browser gagal membuat file PNG.'))
+        }, 'image/png')
+      })
+
+      const finalBlob = await addPngDpiMetadata(renderedBlob, dpi)
+      const safeName = String(shirtName)
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '') || 'desain'
+      const fileName = `digital-sablon-${safeName}-${side}-${dpi}dpi-${Date.now()}.png`
+      const objectUrl = URL.createObjectURL(finalBlob)
+
       const link = document.createElement('a')
-      link.href = dataUrl
-      link.download = `digital-sablon-desain-${Date.now()}.png`
+      link.href = objectUrl
+      link.download = fileName
       document.body.appendChild(link)
       link.click()
       link.remove()
+      URL.revokeObjectURL(objectUrl)
+
+      return {
+        fileName,
+        pixelWidth,
+        pixelHeight,
+        physicalWidthCm,
+        physicalHeightCm,
+        dpi,
+        warningCount: clippingWarnings.length,
+      }
     } finally {
       canvas.backgroundColor = previousBackground
       canvas.requestRenderAll()
@@ -528,6 +776,7 @@ return {
   layers,
   analysis,
   designPreview,
+  setPrintArea,
   serializeCanvas,
   restoreCanvas,
   isAnalyzing,
