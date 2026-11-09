@@ -230,6 +230,7 @@ export default function useDesignEditor(canvasElement) {
   }, [])
 
   const [designPreview, setDesignPreview] = useState(null)
+  const [designPreviewVersion, setDesignPreviewVersion] = useState(0)
 
   const refreshDesignPreview = useCallback(() => {
     const canvas = canvasRef.current
@@ -251,6 +252,7 @@ export default function useDesignEditor(canvasElement) {
         enableRetinaScaling: false,
       })
       setDesignPreview(preview)
+      setDesignPreviewVersion((version) => version + 1)
     } finally {
       canvas.backgroundColor = previousBackground
       canvas.requestRenderAll()
@@ -888,6 +890,7 @@ return {
   layers,
   analysis,
   designPreview,
+  designPreviewVersion,
   setPrintArea,
   serializeCanvas,
   restoreCanvas,
