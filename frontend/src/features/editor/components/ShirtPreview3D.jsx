@@ -3,7 +3,7 @@ import { Canvas, useLoader } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
 
-function Garment({ color, side, productType, designPreview }) {
+function Garment({ color, side, productType, designPreview, designPreviewVersion }) {
   const geometry = useMemo(() => {
     const shape = new THREE.Shape()
 
@@ -58,7 +58,14 @@ function Garment({ color, side, productType, designPreview }) {
         </mesh>
       )}
 
-      {designPreview && <ArtworkTexture src={designPreview} />}
+      {designPreview && (
+        <Suspense fallback={null}>
+          <ArtworkTexture
+            key={`${side}-${designPreviewVersion}`}
+            src={designPreview}
+          />
+        </Suspense>
+      )}
     </group>
   )
 }
@@ -94,6 +101,7 @@ export default function ShirtPreview3D({
   side = 'front',
   productType = 'tshirt',
   designPreview = null,
+  designPreviewVersion = 0,
 }) {
   return (
     <div className="shirt-preview-canvas">
@@ -112,14 +120,13 @@ export default function ShirtPreview3D({
           shadow-mapSize-height={1024}
         />
         <directionalLight position={[-3, 1, -3]} intensity={0.7} />
-        <Suspense fallback={null}>
-          <Garment
-            color={color}
-            side={side}
-            productType={productType}
-            designPreview={designPreview}
-          />
-        </Suspense>
+        <Garment
+          color={color}
+          side={side}
+          productType={productType}
+          designPreview={designPreview}
+          designPreviewVersion={designPreviewVersion}
+        />
         <OrbitControls
           enablePan={false}
           minDistance={3.2}
