@@ -6,18 +6,13 @@ const TOKEN_KEY = 'dss_access_token'
 
 export default function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(() => Boolean(localStorage.getItem(TOKEN_KEY)))
 
   useEffect(() => {
     let isMounted = true
     const token = localStorage.getItem(TOKEN_KEY)
 
-    if (!token) {
-      setLoading(false)
-      return () => {
-        isMounted = false
-      }
-    }
+    if (!token) return undefined
 
     api.get('/auth/me')
       .then((response) => {
