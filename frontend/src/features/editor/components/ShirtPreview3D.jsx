@@ -1,4 +1,4 @@
-import { Suspense, useMemo } from 'react'
+import { Suspense, useEffect, useMemo } from 'react'
 import { Canvas, useLoader } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
@@ -79,6 +79,12 @@ function ArtworkTexture({ src }) {
     preparedTexture.needsUpdate = true
     return preparedTexture
   }, [loadedTexture])
+
+  useEffect(() => {
+    return () => {
+      texture.dispose()
+    }
+  }, [texture])
 
   const aspectRatio = loadedTexture.image?.width / loadedTexture.image?.height || 0.8
 
