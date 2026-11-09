@@ -63,6 +63,7 @@ function Garment({ color, side, productType, designPreview, designPreviewVersion
           <ArtworkTexture
             key={`${side}-${designPreviewVersion}`}
             src={designPreview}
+            side={side}
           />
         </Suspense>
       )}
@@ -70,7 +71,7 @@ function Garment({ color, side, productType, designPreview, designPreviewVersion
   )
 }
 
-function ArtworkTexture({ src }) {
+function ArtworkTexture({ src, side }) {
   const loadedTexture = useLoader(THREE.TextureLoader, src)
   const texture = useMemo(() => {
     const preparedTexture = loadedTexture.clone()
@@ -89,7 +90,13 @@ function ArtworkTexture({ src }) {
   const aspectRatio = loadedTexture.image?.width / loadedTexture.image?.height || 0.8
 
   return (
-    <mesh position={[0, -0.02, 0.105]}>
+    <mesh
+      // Saat kaos diputar 180° untuk tampak belakang, bidang tekstur harus
+      // berada di permukaan lokal belakang agar setelah rotasi berada di luar kaos.
+      position={[0, -0.02, side === 'back' ? -0.112 : 0.112]}
+      // Kompensasi rotasi model agar artwork tetap tegak dan tidak terbalik.
+      rotation={[0, side === 'back' ? Math.PI : 0, 0]}
+    >
       <planeGeometry args={[0.59, 0.59 / aspectRatio]} />
       <meshBasicMaterial
         map={texture}
