@@ -1,5 +1,5 @@
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
-import { useFrame, useLoader } from '@react-three/fiber'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js'
@@ -265,25 +265,50 @@ function buildExactGarmentSurfaceMeshes(mergedBodyGeom, bbox) {
     uvRightSleeve[idx2 + 1] = vRS
   }
 
-  // 3. Deteksi apakah normal mesh menghadap ke luar (+1) atau terbalik ke dalam (-1)
-  let normalOrientationVote = 0
-  const sampleStep = Math.max(3, Math.floor(indexArray.length / 6000) * 3)
-  for (let i = 0; i < indexArray.length; i += sampleStep) {
-    const a = indexArray[i]
-    const vz = posAttr.getZ(a)
-    const nz = normAttr ? normAttr.getZ(a) : 0
-    normalOrientationVote += vz * nz
-  }
-  const normalSign = normalOrientationVote < 0 ? -1 : 1
+  // 3. Kelompokkan segitiga asli pakaian ke masing-masing permukaan (Front, Back, LeftSleeve, RightSleeve)
+  // murni berdasarkan kedalaman lokal (tanpa bergantung pada normalSign yang bisa terbalik pada model double-walled).
+  const sleeveGridRes = 24
+  const leftSleeveMinXGrid = new Float32Array(sleeveGridRes * sleeveGridRes).fill(Infinity)
+  const leftSleeveMaxXGrid = new Float32Array(sleeveGridRes * sleeveGridRes).fill(-Infinity)
+  const rightSleeveMinXGrid = new Float32Array(sleeveGridRes * sleeveGridRes).fill(Infinity)
+  const rightSleeveMaxXGrid = new Float32Array(sleeveGridRes * sleeveGridRes).fill(-Infinity)
 
-  // 4. Kelompokkan segitiga asli pakaian ke masing-masing permukaan (Front, Back, LeftSleeve, RightSleeve)
+  for (let i = 0; i < vertexCount; i++) {
+    const vx = posAttr.getX(i)
+    const vy = posAttr.getY(i)
+    const vz = posAttr.getZ(i)
+
+    if (vx >= leftSleeveXThreshold * 0.9) {
+      const sy = Math.max(
+        0,
+        Math.min(sleeveGridRes - 1, Math.floor(((vy - lMinY) / lHeight) * sleeveGridRes))
+      )
+      const sz = Math.max(
+        0,
+        Math.min(sleeveGridRes - 1, Math.floor(((vz - lMinZ) / lDepth) * sleeveGridRes))
+      )
+      const sIdx = sy * sleeveGridRes + sz
+      if (vx < leftSleeveMinXGrid[sIdx]) leftSleeveMinXGrid[sIdx] = vx
+      if (vx > leftSleeveMaxXGrid[sIdx]) leftSleeveMaxXGrid[sIdx] = vx
+    } else if (vx <= rightSleeveXThreshold * 0.9) {
+      const sy = Math.max(
+        0,
+        Math.min(sleeveGridRes - 1, Math.floor(((vy - rMinY) / rHeight) * sleeveGridRes))
+      )
+      const sz = Math.max(
+        0,
+        Math.min(sleeveGridRes - 1, Math.floor(((vz - rMinZ) / rDepth) * sleeveGridRes))
+      )
+      const sIdx = sy * sleeveGridRes + sz
+      if (vx < rightSleeveMinXGrid[sIdx]) rightSleeveMinXGrid[sIdx] = vx
+      if (vx > rightSleeveMaxXGrid[sIdx]) rightSleeveMaxXGrid[sIdx] = vx
+    }
+  }
+
   const frontIndices = []
   const backIndices = []
   const leftSleeveIndices = []
   const rightSleeveIndices = []
-
-  const lMidX = (leftSleeveXThreshold + maxX) * 0.48
-  const rMidX = (rightSleeveXThreshold + minX) * 0.48
 
   for (let i = 0; i < indexArray.length; i += 3) {
     const a = indexArray[i]
@@ -304,23 +329,6 @@ function buildExactGarmentSurfaceMeshes(mergedBodyGeom, bbox) {
     const midY = (ay + by + cy) / 3
     const midZ = (az + bz + cz) / 3
 
-    // Hitung face normal dari cross product
-    const abx = bx - ax,
-      aby = by - ay,
-      abz = bz - az
-    const acx = cx - ax,
-      acy = cy - ay,
-      acz = cz - az
-    const fnx = (aby * acz - abz * acy) * normalSign
-    const fnz = (abx * acy - aby * acx) * normalSign
-    const fnLen = Math.hypot(
-      fnx,
-      (abz * acx - abx * acz) * normalSign,
-      fnz
-    )
-    const nzNorm = fnLen > 1e-7 ? fnz / fnLen : 0
-    const nxNorm = fnLen > 1e-7 ? fnx / fnLen : 0
-
     const cellX = Math.max(
       0,
       Math.min(gridRes - 1, Math.floor(((midX - minX) / width) * gridRes))
@@ -335,52 +343,129 @@ function buildExactGarmentSurfaceMeshes(mergedBodyGeom, bbox) {
     const cMidZ = (cMinZ + cMaxZ) * 0.5
     const cSpanZ = cMaxZ - cMinZ
 
-    // Segitiga permukaan luar DEPAN
-    const isFrontOuter =
-      midZ >= cMidZ - 0.025 &&
-      (cSpanZ < 0.05 || midZ >= cMaxZ - cSpanZ * 0.55) &&
-      nzNorm >= -0.15
-    if (isFrontOuter) {
+    // Segitiga permukaan luar DEPAN (+Z)
+    if (
+      midZ >= cMidZ - 0.015 &&
+      (cSpanZ < 0.045 || midZ >= cMaxZ - Math.max(0.04, cSpanZ * 0.45))
+    ) {
       frontIndices.push(a, b, c)
     }
 
-    // Segitiga permukaan luar BELAKANG
-    const isBackOuter =
-      midZ <= cMidZ + 0.025 &&
-      (cSpanZ < 0.05 || midZ <= cMinZ + cSpanZ * 0.55) &&
-      nzNorm <= 0.15
-    if (isBackOuter) {
+    // Segitiga permukaan luar BELAKANG (-Z)
+    if (
+      midZ <= cMidZ + 0.015 &&
+      (cSpanZ < 0.045 || midZ <= cMinZ + Math.max(0.04, cSpanZ * 0.45))
+    ) {
       backIndices.push(a, b, c)
     }
 
     // Segitiga permukaan luar LENGAN KIRI (+X)
     if (
-      midX >= leftSleeveXThreshold * 0.92 &&
+      midX >= leftSleeveXThreshold * 0.9 &&
       midY >= lMinY - 0.02 &&
-      midY <= lMaxY + 0.02 &&
-      (nxNorm >= -0.2 || midX >= lMidX)
+      midY <= lMaxY + 0.02
     ) {
-      leftSleeveIndices.push(a, b, c)
+      const sy = Math.max(
+        0,
+        Math.min(sleeveGridRes - 1, Math.floor(((midY - lMinY) / lHeight) * sleeveGridRes))
+      )
+      const sz = Math.max(
+        0,
+        Math.min(sleeveGridRes - 1, Math.floor(((midZ - lMinZ) / lDepth) * sleeveGridRes))
+      )
+      const sIdx = sy * sleeveGridRes + sz
+      const sMinX = Number.isFinite(leftSleeveMinXGrid[sIdx])
+        ? leftSleeveMinXGrid[sIdx]
+        : leftSleeveXThreshold
+      const sMaxX = Number.isFinite(leftSleeveMaxXGrid[sIdx])
+        ? leftSleeveMaxXGrid[sIdx]
+        : maxX
+      const sMidX = (sMinX + sMaxX) * 0.5
+      if (midX >= sMidX - 0.02) {
+        leftSleeveIndices.push(a, b, c)
+      }
     }
 
     // Segitiga permukaan luar LENGAN KANAN (-X)
     if (
-      midX <= rightSleeveXThreshold * 0.92 &&
+      midX <= rightSleeveXThreshold * 0.9 &&
       midY >= rMinY - 0.02 &&
-      midY <= rMaxY + 0.02 &&
-      (nxNorm <= 0.2 || midX <= rMidX)
+      midY <= rMaxY + 0.02
     ) {
-      rightSleeveIndices.push(a, b, c)
+      const sy = Math.max(
+        0,
+        Math.min(sleeveGridRes - 1, Math.floor(((midY - rMinY) / rHeight) * sleeveGridRes))
+      )
+      const sz = Math.max(
+        0,
+        Math.min(sleeveGridRes - 1, Math.floor(((midZ - rMinZ) / rDepth) * sleeveGridRes))
+      )
+      const sIdx = sy * sleeveGridRes + sz
+      const sMinX = Number.isFinite(rightSleeveMinXGrid[sIdx])
+        ? rightSleeveMinXGrid[sIdx]
+        : minX
+      const sMaxX = Number.isFinite(rightSleeveMaxXGrid[sIdx])
+        ? rightSleeveMaxXGrid[sIdx]
+        : rightSleeveXThreshold
+      const sMidX = (sMinX + sMaxX) * 0.5
+      if (midX <= sMidX + 0.02) {
+        rightSleeveIndices.push(a, b, c)
+      }
     }
   }
 
-  const createSharedSurfaceGeometry = (uvArray, triIndices) => {
+  /**
+   * Bangun BufferGeometry mandiri yang ringkas untuk setiap sisi cetak,
+   * dengan offset keluar tipis (3.5 mm pada sumbu pandang) agar 100% bebas Z-fighting
+   * terhadap kain tebal/double-walled namun tetap mustahil keluar dari siluet 3D kaos.
+   */
+  const createCompactPrintGeometry = (uvArray, triIndices, offsetX, offsetY, offsetZ) => {
+    const vertexMap = new Int32Array(vertexCount).fill(-1)
+    const remappedIndices = new Uint32Array(triIndices.length)
+    let compactCount = 0
+
+    for (let i = 0; i < triIndices.length; i++) {
+      const origIdx = triIndices[i]
+      let mapped = vertexMap[origIdx]
+      if (mapped === -1) {
+        mapped = compactCount++
+        vertexMap[origIdx] = mapped
+      }
+      remappedIndices[i] = mapped
+    }
+
+    const compactPos = new Float32Array(compactCount * 3)
+    const compactNorm = new Float32Array(compactCount * 3)
+    const compactUv = new Float32Array(compactCount * 2)
+
+    for (let origIdx = 0; origIdx < vertexCount; origIdx++) {
+      const mapped = vertexMap[origIdx]
+      if (mapped === -1) continue
+
+      const dst3 = mapped * 3
+      compactPos[dst3] = posAttr.getX(origIdx) + offsetX
+      compactPos[dst3 + 1] = posAttr.getY(origIdx) + offsetY
+      compactPos[dst3 + 2] = posAttr.getZ(origIdx) + offsetZ
+
+      if (normAttr) {
+        compactNorm[dst3] = normAttr.getX(origIdx)
+        compactNorm[dst3 + 1] = normAttr.getY(origIdx)
+        compactNorm[dst3 + 2] = normAttr.getZ(origIdx)
+      }
+
+      const src2 = origIdx * 2
+      const dst2 = mapped * 2
+      compactUv[dst2] = uvArray[src2]
+      compactUv[dst2 + 1] = uvArray[src2 + 1]
+    }
+
     const geom = new THREE.BufferGeometry()
-    // Berbagi BufferAttribute position & normal yang SAMA PERSIS dengan Garment_Body
-    geom.setAttribute('position', posAttr)
-    geom.setAttribute('normal', normAttr)
-    geom.setAttribute('uv', new THREE.BufferAttribute(uvArray, 2))
-    geom.setIndex(triIndices)
+    geom.setAttribute('position', new THREE.BufferAttribute(compactPos, 3))
+    geom.setAttribute('normal', new THREE.BufferAttribute(compactNorm, 3))
+    geom.setAttribute('uv', new THREE.BufferAttribute(compactUv, 2))
+    geom.setIndex(new THREE.BufferAttribute(remappedIndices, 1))
+    geom.computeBoundingBox()
+    geom.computeBoundingSphere()
     return geom
   }
 
@@ -406,15 +491,21 @@ function buildExactGarmentSurfaceMeshes(mergedBodyGeom, bbox) {
 
   return {
     printMeshes: {
-      Print_Front: createSharedSurfaceGeometry(uvFront, frontIndices),
-      Print_Back: createSharedSurfaceGeometry(uvBack, backIndices),
-      Print_LeftSleeve: createSharedSurfaceGeometry(
+      Print_Front: createCompactPrintGeometry(uvFront, frontIndices, 0, 0, 0.0035),
+      Print_Back: createCompactPrintGeometry(uvBack, backIndices, 0, 0, -0.0035),
+      Print_LeftSleeve: createCompactPrintGeometry(
         uvLeftSleeve,
-        leftSleeveIndices
+        leftSleeveIndices,
+        0.0035,
+        0,
+        0
       ),
-      Print_RightSleeve: createSharedSurfaceGeometry(
+      Print_RightSleeve: createCompactPrintGeometry(
         uvRightSleeve,
-        rightSleeveIndices
+        rightSleeveIndices,
+        -0.0035,
+        0,
+        0
       ),
     },
     surfaceMapping: {
@@ -514,6 +605,7 @@ function normalizeAndPrepareModel(rawRoot) {
 
   const mergedBodyGeom = mergeGeometriesToIndexed(bodyGeometries)
   mergedBodyGeom.computeBoundingBox()
+  mergedBodyGeom.computeBoundingSphere()
   const normalizedBox = mergedBodyGeom.boundingBox
   const totalVertices = mergedBodyGeom.attributes.position?.count || 0
 
@@ -585,8 +677,12 @@ async function loadPrepared3DModel(url, formatHint = '') {
   const prepared = normalizeAndPrepareModel(rawRoot)
 
   if (prepared.totalVertices <= 15000) {
-    prepared.bodyGeometries.forEach((g) => {
-      if (g.attributes.position && !g.userData.basePositions) {
+    const allDeformable = [
+      ...prepared.bodyGeometries,
+      ...Object.values(prepared.printMeshes || {}),
+    ]
+    allDeformable.forEach((g) => {
+      if (g?.attributes?.position && !g.userData.basePositions) {
         g.userData.basePositions = new Float32Array(
           g.attributes.position.array
         )
@@ -633,34 +729,54 @@ function PrintSurfaceTexture({
   fabricBumpMap = null,
   fabricBumpScale = 0.012,
 }) {
-  const loadedTexture = useLoader(THREE.TextureLoader, src)
-
-  const { colorTexture, bumpTexture } = useMemo(() => {
-    const tex = createClampedPrintTexture(loadedTexture.image)
-
-    const bump =
-      puffPrint?.enabled && loadedTexture.image
-        ? createPuffPrintBumpMap(loadedTexture.image)
-        : null
-
-    if (bump) {
-      bump.flipY = true
-      bump.wrapS = THREE.ClampToEdgeWrapping
-      bump.wrapT = THREE.ClampToEdgeWrapping
-      bump.needsUpdate = true
-    }
-
-    return { colorTexture: tex, bumpTexture: bump }
-  }, [loadedTexture, puffPrint?.enabled])
+  const [textures, setTextures] = useState({
+    colorTexture: null,
+    bumpTexture: null,
+  })
 
   useEffect(() => {
-    return () => {
-      colorTexture.dispose()
-      if (bumpTexture) bumpTexture.dispose()
+    if (!src) {
+      setTextures({ colorTexture: null, bumpTexture: null })
+      return undefined
     }
-  }, [colorTexture, bumpTexture])
 
-  const activeBumpMap = puffPrint?.enabled ? bumpTexture : fabricBumpMap
+    let isCancelled = false
+    let createdColorTex = null
+    let createdBumpTex = null
+
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      if (isCancelled) return
+      createdColorTex = createClampedPrintTexture(img)
+      createdBumpTex = puffPrint?.enabled ? createPuffPrintBumpMap(img) : null
+      if (createdBumpTex) {
+        createdBumpTex.flipY = true
+        createdBumpTex.wrapS = THREE.ClampToEdgeWrapping
+        createdBumpTex.wrapT = THREE.ClampToEdgeWrapping
+        createdBumpTex.needsUpdate = true
+      }
+      setTextures({
+        colorTexture: createdColorTex,
+        bumpTexture: createdBumpTex,
+      })
+    }
+    img.src = src
+
+    return () => {
+      isCancelled = true
+      if (createdColorTex) createdColorTex.dispose()
+      if (createdBumpTex) createdBumpTex.dispose()
+    }
+  }, [src, puffPrint?.enabled])
+
+  if (!textures.colorTexture || !geometry) {
+    return null
+  }
+
+  const activeBumpMap = puffPrint?.enabled
+    ? textures.bumpTexture
+    : fabricBumpMap
   const activeBumpScale = puffPrint?.enabled
     ? (Number(puffPrint.height) || 0.55) *
       (Number(puffPrint.intensity) || 0.7) *
@@ -672,20 +788,20 @@ function PrintSurfaceTexture({
     : 0.72
 
   return (
-    <mesh geometry={geometry}>
+    <mesh geometry={geometry} renderOrder={2}>
       <meshStandardMaterial
-        map={colorTexture}
+        map={textures.colorTexture}
         bumpMap={activeBumpMap || null}
         bumpScale={activeBumpScale}
         roughness={roughness}
         metalness={0.02}
         transparent
-        alphaTest={0.015}
-        depthWrite={false}
+        alphaTest={0.02}
+        depthWrite
         depthFunc={THREE.LEqualDepth}
         polygonOffset
-        polygonOffsetFactor={-1}
-        polygonOffsetUnits={-1}
+        polygonOffsetFactor={-2}
+        polygonOffsetUnits={-2}
         side={THREE.DoubleSide}
       />
     </mesh>
@@ -825,6 +941,11 @@ export default function ShirtModel({
     const bodyGeoms = preparedModel.bodyGeometries
     if (!group || !bodyGeoms || bodyGeoms.length === 0) return
 
+    const deformableGeoms = [
+      ...bodyGeoms,
+      ...Object.values(preparedModel.printMeshes || {}),
+    ]
+
     const mode = motion?.mode || 'static'
     const isPlaying = motion?.isPlaying !== false
     const speed = Number(motion?.speed) || 1.0
@@ -837,9 +958,9 @@ export default function ShirtModel({
       group.scale.set(1, 1, 1)
 
       if (wasDeformedRef.current) {
-        bodyGeoms.forEach((geom) => {
-          const posAttr = geom.attributes.position
-          const basePos = geom.userData.basePositions
+        deformableGeoms.forEach((geom) => {
+          const posAttr = geom?.attributes?.position
+          const basePos = geom?.userData?.basePositions
           if (basePos && posAttr) {
             posAttr.array.set(basePos)
             posAttr.needsUpdate = true
@@ -865,9 +986,9 @@ export default function ShirtModel({
 
       if (canDeformVertices) {
         wasDeformedRef.current = true
-        bodyGeoms.forEach((geom) => {
-          const posAttr = geom.attributes.position
-          const basePos = geom.userData.basePositions
+        deformableGeoms.forEach((geom) => {
+          const posAttr = geom?.attributes?.position
+          const basePos = geom?.userData?.basePositions
           if (!basePos || !posAttr) return
 
           const arr = posAttr.array
@@ -901,9 +1022,9 @@ export default function ShirtModel({
 
       if (canDeformVertices) {
         wasDeformedRef.current = true
-        bodyGeoms.forEach((geom) => {
-          const posAttr = geom.attributes.position
-          const basePos = geom.userData.basePositions
+        deformableGeoms.forEach((geom) => {
+          const posAttr = geom?.attributes?.position
+          const basePos = geom?.userData?.basePositions
           if (!basePos || !posAttr) return
 
           const arr = posAttr.array
@@ -933,9 +1054,9 @@ export default function ShirtModel({
 
       if (canDeformVertices) {
         wasDeformedRef.current = true
-        bodyGeoms.forEach((geom) => {
-          const posAttr = geom.attributes.position
-          const basePos = geom.userData.basePositions
+        deformableGeoms.forEach((geom) => {
+          const posAttr = geom?.attributes?.position
+          const basePos = geom?.userData?.basePositions
           if (!basePos || !posAttr) return
 
           const arr = posAttr.array
@@ -1001,55 +1122,43 @@ export default function ShirtModel({
       ))}
 
       {frontSrc && printMeshes?.Print_Front && (
-        <Suspense fallback={null}>
-          <PrintSurfaceTexture
-            key={`front-${activeSide === 'front' ? designPreviewVersion : 'saved'}`}
-            geometry={printMeshes.Print_Front}
-            src={frontSrc}
-            puffPrint={materialEffects?.puffPrint}
-            fabricBumpMap={fabricBumpMap}
-            fabricBumpScale={fabricConfig.bumpScale}
-          />
-        </Suspense>
+        <PrintSurfaceTexture
+          geometry={printMeshes.Print_Front}
+          src={frontSrc}
+          puffPrint={materialEffects?.puffPrint}
+          fabricBumpMap={fabricBumpMap}
+          fabricBumpScale={fabricConfig.bumpScale}
+        />
       )}
 
       {backSrc && printMeshes?.Print_Back && (
-        <Suspense fallback={null}>
-          <PrintSurfaceTexture
-            key={`back-${activeSide === 'back' ? designPreviewVersion : 'saved'}`}
-            geometry={printMeshes.Print_Back}
-            src={backSrc}
-            puffPrint={materialEffects?.puffPrint}
-            fabricBumpMap={fabricBumpMap}
-            fabricBumpScale={fabricConfig.bumpScale}
-          />
-        </Suspense>
+        <PrintSurfaceTexture
+          geometry={printMeshes.Print_Back}
+          src={backSrc}
+          puffPrint={materialEffects?.puffPrint}
+          fabricBumpMap={fabricBumpMap}
+          fabricBumpScale={fabricConfig.bumpScale}
+        />
       )}
 
       {leftSleeveSrc && printMeshes?.Print_LeftSleeve && (
-        <Suspense fallback={null}>
-          <PrintSurfaceTexture
-            key={`left_sleeve-${activeSide === 'left_sleeve' ? designPreviewVersion : 'saved'}`}
-            geometry={printMeshes.Print_LeftSleeve}
-            src={leftSleeveSrc}
-            puffPrint={materialEffects?.puffPrint}
-            fabricBumpMap={fabricBumpMap}
-            fabricBumpScale={fabricConfig.bumpScale}
-          />
-        </Suspense>
+        <PrintSurfaceTexture
+          geometry={printMeshes.Print_LeftSleeve}
+          src={leftSleeveSrc}
+          puffPrint={materialEffects?.puffPrint}
+          fabricBumpMap={fabricBumpMap}
+          fabricBumpScale={fabricConfig.bumpScale}
+        />
       )}
 
       {rightSleeveSrc && printMeshes?.Print_RightSleeve && (
-        <Suspense fallback={null}>
-          <PrintSurfaceTexture
-            key={`right_sleeve-${activeSide === 'right_sleeve' ? designPreviewVersion : 'saved'}`}
-            geometry={printMeshes.Print_RightSleeve}
-            src={rightSleeveSrc}
-            puffPrint={materialEffects?.puffPrint}
-            fabricBumpMap={fabricBumpMap}
-            fabricBumpScale={fabricConfig.bumpScale}
-          />
-        </Suspense>
+        <PrintSurfaceTexture
+          geometry={printMeshes.Print_RightSleeve}
+          src={rightSleeveSrc}
+          puffPrint={materialEffects?.puffPrint}
+          fabricBumpMap={fabricBumpMap}
+          fabricBumpScale={fabricConfig.bumpScale}
+        />
       )}
     </group>
   )
