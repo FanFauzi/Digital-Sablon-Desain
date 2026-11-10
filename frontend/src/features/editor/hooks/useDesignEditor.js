@@ -972,87 +972,9 @@ export default function useDesignEditor(canvasElement) {
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analysisError, setAnalysisError] = useState('')
   const analysisCacheRef = useRef(new Map())
+  const lastAnalyzedObjectIdRef = useRef(null)
 
-  const analyzeSelectedImage = useCallback(async (options = {}) => {
-    const canvas = canvasRef.current
-    const active = canvas?.getActiveObject()
-
-    if (!active || active.type !== 'image' || typeof active.getElement !== 'function') {
-      throw new Error('Pilih objek gambar terlebih dahulu untuk dianalisis.')
-    }
-
-    const { forceRefresh = false } = options
-    const cacheKey = active.editorId || null
-
-    if (!forceRefresh && cacheKey && analysisCacheRef.current.has(cacheKey)) {
-      const cachedResult = analysisCacheRef.current.get(cacheKey)
-      setAnalysisError('')
-      setAnalysis(cachedResult)
-      return cachedResult
-    }
-
-    setIsAnalyzing(true)
-    setAnalysisError('')
-    setAnalysis(null)
-
-    try {
-      const source = active.getElement()
-      const rawWidth = source.naturalWidth || source.width
-      const rawHeight = source.naturalHeight || source.height
-
-      if (!rawWidth || !rawHeight) {
-        throw new Error('Gambar tidak dapat dibaca oleh browser.')
-      }
-
-      // Batasi dimensi gambar analisis maksimal 1024px agar tidak memicu HTTP 413 atau timeout.
-      const maxAnalysisDimension = 1024
-      const scale = Math.min(
-        maxAnalysisDimension / rawWidth,
-        maxAnalysisDimension / rawHeight,
-        1
-      )
-      const targetWidth = Math.max(1, Math.round(rawWidth * scale))
-      const targetHeight = Math.max(1, Math.round(rawHeight * scale))
-
-      const imageCanvas = document.createElement('canvas')
-      imageCanvas.width = targetWidth
-      imageCanvas.height = targetHeight
-
-      const context = imageCanvas.getContext('2d')
-      if (!context) {
-        throw new Error('Browser tidak dapat menyiapkan gambar untuk analisis.')
-      }
-
-      context.drawImage(source, 0, 0, targetWidth, targetHeight)
-
-      const blob = await new Promise((resolve) => imageCanvas.toBlob(resolve, 'image/png'))
-
-      if (!blob) {
-        throw new Error('Gagal menyiapkan gambar untuk analisis.')
-      }
-
-      const formData = new FormData()
-      formData.append('image', blob, 'design-analysis.png')
-
-      const response = await api.post('/designs/analyze', formData)
-      const result = response.data.data
-
-      if (cacheKey && result) {
-        analysisCacheRef.current.set(cacheKey, result)
-      }
-
-      setAnalysis(result)
-      return result
-    } catch (error) {
-      const message = error.response?.data?.message || error.message || 'Analisis AI gagal.'
-      setAnalysisError(message)
-      throw new Error(message, { cause: error })
-    } finally {
-      setIsAnalyzing(false)
-    }
-  }, [])
-
-  const applyRecommendedPlacement = useCallback((customPlacement = null) => {
+  const applyRecommendedPlacement = useCallback((customPlacement = null, preferredEditorId = null) => {
     const canvas = canvasRef.current
     if (!canvas) {
       throw new Error('Kanvas desain belum siap.')
@@ -1064,21 +986,25 @@ export default function useDesignEditor(canvasElement) {
     }
 
     const active = canvas.getActiveObject()
+    const allImages = canvas
+      .getObjects()
+      .filter((item) => !item.isPrintBoundary && String(item.type || '').toLowerCase() === 'image')
+
+    const lookupId = preferredEditorId || lastAnalyzedObjectIdRef.current
     const targetImage =
-      active && String(active.type || '').toLowerCase() === 'image'
-        ? active
-        : canvas
-            .getObjects()
-            .find((item) => !item.isPrintBoundary && String(item.type || '').toLowerCase() === 'image')
+      (lookupId && allImages.find((item) => item.editorId === lookupId)) ||
+      (active && String(active.type || '').toLowerCase() === 'image' ? active : null) ||
+      allImages[0] ||
+      null
 
     if (!targetImage || !targetImage.width || !targetImage.height) {
-      throw new Error('Pilih objek gambar pada kanvas untuk menerapkan rekomendasi.')
+      throw new Error('Tambahkan atau pilih objek gambar pada kanvas untuk menerapkan rekomendasi.')
     }
 
     const printArea = printAreaRef.current
-    const widthPercent = Math.min(92, Math.max(12, Number(placement.width_percent) || 38))
+    const widthPercent = Math.min(92, Math.max(12, Number(placement.width_percent) || 50))
     const posXPercent = Math.min(88, Math.max(12, Number(placement.position_x_percent) || 50))
-    const posYPercent = Math.min(88, Math.max(12, Number(placement.position_y_percent) || 45))
+    const posYPercent = Math.min(88, Math.max(12, Number(placement.position_y_percent) || 35))
 
     const desiredWidth = (widthPercent / 100) * printArea.width
     const maxAllowedHeight = printArea.height * 0.92
@@ -1124,7 +1050,134 @@ export default function useDesignEditor(canvasElement) {
     syncSelectedObject(targetImage)
     refreshLayers()
     refreshDesignPreview()
+
+    return {
+      area: placement.area,
+      position_code: placement.position_code,
+      position_x_percent: posXPercent,
+      position_y_percent: posYPercent,
+      width_percent: widthPercent,
+      left: Math.round(clampedCenterX),
+      top: Math.round(clampedCenterY),
+      width: Math.round(scaledWidth),
+      height: Math.round(scaledHeight),
+    }
   }, [analysis, refreshDesignPreview, refreshLayers, syncSelectedObject])
+
+  const analyzeSelectedImage = useCallback(async (options = {}) => {
+    const canvas = canvasRef.current
+    if (!canvas) {
+      throw new Error('Kanvas desain belum siap.')
+    }
+
+    const active = canvas.getActiveObject()
+    const targetImage =
+      active && String(active.type || '').toLowerCase() === 'image'
+        ? active
+        : canvas
+            .getObjects()
+            .find((item) => !item.isPrintBoundary && String(item.type || '').toLowerCase() === 'image')
+
+    if (!targetImage || typeof targetImage.getElement !== 'function') {
+      throw new Error('Unggah atau pilih objek gambar terlebih dahulu untuk dianalisis.')
+    }
+
+    if (active !== targetImage) {
+      canvas.setActiveObject(targetImage)
+      canvas.requestRenderAll()
+      syncSelectedObject(targetImage)
+    }
+
+    const {
+      forceRefresh = false,
+      autoApply = true,
+      shirtType = 'tshirt',
+      currentSide = activeSideRef.current,
+      currentColor = '#ffffff',
+    } = options
+
+    const objectEditorId = targetImage.editorId || null
+    lastAnalyzedObjectIdRef.current = objectEditorId
+    const cacheKey = objectEditorId ? `${objectEditorId}:${currentSide}` : null
+
+    if (!forceRefresh && cacheKey && analysisCacheRef.current.has(cacheKey)) {
+      const cachedResult = analysisCacheRef.current.get(cacheKey)
+      setAnalysisError('')
+      setAnalysis(cachedResult)
+      if (autoApply && cachedResult?.recommendations?.placement) {
+        applyRecommendedPlacement(cachedResult.recommendations.placement, objectEditorId)
+      }
+      return cachedResult
+    }
+
+    setIsAnalyzing(true)
+    setAnalysisError('')
+    setAnalysis(null)
+
+    try {
+      const source = targetImage.getElement()
+      const rawWidth = source.naturalWidth || source.width
+      const rawHeight = source.naturalHeight || source.height
+
+      if (!rawWidth || !rawHeight) {
+        throw new Error('Gambar tidak dapat dibaca oleh browser.')
+      }
+
+      // Batasi dimensi gambar analisis maksimal 1024px agar tidak memicu HTTP 413 atau timeout.
+      const maxAnalysisDimension = 1024
+      const scale = Math.min(
+        maxAnalysisDimension / rawWidth,
+        maxAnalysisDimension / rawHeight,
+        1
+      )
+      const targetWidth = Math.max(1, Math.round(rawWidth * scale))
+      const targetHeight = Math.max(1, Math.round(rawHeight * scale))
+
+      const imageCanvas = document.createElement('canvas')
+      imageCanvas.width = targetWidth
+      imageCanvas.height = targetHeight
+
+      const context = imageCanvas.getContext('2d')
+      if (!context) {
+        throw new Error('Browser tidak dapat menyiapkan gambar untuk analisis.')
+      }
+
+      context.drawImage(source, 0, 0, targetWidth, targetHeight)
+
+      const blob = await new Promise((resolve) => imageCanvas.toBlob(resolve, 'image/png'))
+
+      if (!blob) {
+        throw new Error('Gagal menyiapkan gambar untuk analisis.')
+      }
+
+      const formData = new FormData()
+      formData.append('image', blob, 'design-analysis.png')
+      formData.append('shirt_type', String(shirtType || 'tshirt'))
+      formData.append('current_side', String(currentSide || activeSideRef.current || 'front'))
+      formData.append('current_color', String(currentColor || '#ffffff'))
+
+      const response = await api.post('/designs/analyze', formData)
+      const result = response.data.data
+
+      if (cacheKey && result) {
+        analysisCacheRef.current.set(cacheKey, result)
+      }
+
+      setAnalysis(result)
+
+      if (autoApply && result?.recommendations?.placement) {
+        applyRecommendedPlacement(result.recommendations.placement, objectEditorId)
+      }
+
+      return result
+    } catch (error) {
+      const message = error.response?.data?.message || error.message || 'Analisis AI gagal.'
+      setAnalysisError(message)
+      throw new Error(message, { cause: error })
+    } finally {
+      setIsAnalyzing(false)
+    }
+  }, [applyRecommendedPlacement, syncSelectedObject])
 
   const exportDesign = useCallback(async (options = {}) => {
     const canvas = canvasRef.current

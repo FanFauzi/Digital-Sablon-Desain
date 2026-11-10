@@ -345,7 +345,9 @@ export default function EditorPage() {
         editor={editor}
         exportOptions={{
           shirtName: shirt?.name,
+          shirtType: shirt?.type,
           side: selectedSide,
+          selectedColor,
           printArea,
           isSwitchingSide,
         }}
@@ -580,7 +582,17 @@ export default function EditorPage() {
         <aside className="editor-sidebar">
           <PropertiesPanel editor={editor} />
           <LayerPanel editor={editor} />
-          <AIAnalysisPanel editor={editor} />
+          <AIAnalysisPanel
+            editor={editor}
+            productContext={{
+              shirtType: shirt?.type,
+              selectedSide,
+              selectedColor,
+              colorOptions,
+              onSelectColor: handleColorChange,
+              onSelectSide: handleSideChange,
+            }}
+          />
         </aside>
       </div>
     </main>

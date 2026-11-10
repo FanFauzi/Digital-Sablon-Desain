@@ -56,11 +56,17 @@ export default function EditorToolbar({ editor, exportOptions }) {
       <button
         type="button"
         className="ai-analysis-button"
-        disabled={exportOptions?.isSwitchingSide}
+        disabled={exportOptions?.isSwitchingSide || editor.isAnalyzing}
         onClick={() => {
-          editor.analyzeSelectedImage().catch((error) => {
-            alert(error.message || 'Pilih gambar terlebih dahulu untuk dianalisis.')
-          })
+          editor
+            .analyzeSelectedImage({
+              shirtType: exportOptions?.shirtType,
+              currentSide: exportOptions?.side,
+              currentColor: exportOptions?.selectedColor,
+            })
+            .catch((error) => {
+              alert(error.message || 'Pilih gambar terlebih dahulu untuk dianalisis.')
+            })
         }}
       >
         {editor.isAnalyzing ? 'Menganalisis...' : '✦ Analisis AI'}
