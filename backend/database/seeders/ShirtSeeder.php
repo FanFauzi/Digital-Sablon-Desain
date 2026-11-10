@@ -26,7 +26,7 @@ class ShirtSeeder extends Seeder
             [
                 'name' => 'Basic T-Shirt',
                 'type' => 'tshirt',
-                'model_3d_path' => '/models/tshirt-regular.glb',
+                'model_3d_path' => '/models/T SHIRT.fbx',
                 'description' => 'Kaos regular fit berbahan cotton combed untuk kustomisasi sablon depan, belakang, dan lengan.',
                 'variants' => $defaultColors,
                 'areas' => [
@@ -59,7 +59,7 @@ class ShirtSeeder extends Seeder
             [
                 'name' => 'Oversized T-Shirt',
                 'type' => 'tshirt',
-                'model_3d_path' => '/models/tshirt-oversized.glb',
+                'model_3d_path' => '/models/oversized_t-shirt.glb',
                 'description' => 'Kaos potongan boxy drop-shoulder streetwear dengan area cetak lebih lebar.',
                 'variants' => $defaultColors,
                 'areas' => [

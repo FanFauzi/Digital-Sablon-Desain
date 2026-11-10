@@ -78,9 +78,9 @@ class ShirtController extends Controller
         if ($shirt->type === 'hoodie' || str_contains($nameLower, 'hoodie')) {
             $shirt->model_3d_path = '/models/hoodie-classic.glb';
         } elseif (str_contains($nameLower, 'oversize')) {
-            $shirt->model_3d_path = '/models/tshirt-oversized.glb';
+            $shirt->model_3d_path = '/models/oversized_t-shirt.glb';
         } else {
-            $shirt->model_3d_path = '/models/tshirt-regular.glb';
+            $shirt->model_3d_path = '/models/T SHIRT.fbx';
         }
     }
 

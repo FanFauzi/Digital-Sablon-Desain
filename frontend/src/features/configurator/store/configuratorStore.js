@@ -3,21 +3,33 @@ import { create } from 'zustand'
 export const GARMENT_MODELS = [
   {
     id: 'regular',
-    name: 'Regular T-Shirt',
-    label: 'Regular T-Shirt',
-    fitLabel: 'Regular Fit · Crewneck',
+    name: 'Regular T-Shirt (FBX)',
+    label: 'Regular T-Shirt (FBX)',
+    fitLabel: 'T SHIRT.fbx · Regular Fit',
     type: 'tshirt',
-    modelPath: '/models/tshirt-regular.glb',
-    description: 'Potongan kaos regular fit klasik untuk harian & produksi komersial.',
+    modelPath: '/models/T SHIRT.fbx',
+    candidatePaths: [
+      '/models/T SHIRT.fbx',
+      '/models/t-shirt.fbx',
+      '/models/tshirt-regular.glb',
+    ],
+    fallbackPath: '/models/tshirt-regular.glb',
+    description: 'Model 3D T SHIRT.fbx untuk kaos regular fit dengan tekstur & kontur lipatan kain realistis.',
   },
   {
     id: 'oversized',
-    name: 'Oversized T-Shirt',
-    label: 'Oversized T-Shirt',
-    fitLabel: 'Boxy Drop-Shoulder',
+    name: 'Oversized T-Shirt (GLB)',
+    label: 'Oversized T-Shirt (GLB)',
+    fitLabel: 'oversized_t-shirt.glb · Boxy Fit',
     type: 'tshirt',
-    modelPath: '/models/tshirt-oversized.glb',
-    description: 'Potongan boxy drop-shoulder streetwear dengan area cetak lebih lebar.',
+    modelPath: '/models/oversized_t-shirt.glb',
+    candidatePaths: [
+      '/models/oversized_t-shirt.glb',
+      '/models/oversized-t-shirt.glb',
+      '/models/tshirt-oversized.glb',
+    ],
+    fallbackPath: '/models/tshirt-oversized.glb',
+    description: 'Model 3D oversized_t-shirt.glb potongan boxy drop-shoulder streetwear.',
   },
   {
     id: 'hoodie',
@@ -26,6 +38,8 @@ export const GARMENT_MODELS = [
     fitLabel: 'Heavyweight Pullover',
     type: 'hoodie',
     modelPath: '/models/hoodie-classic.glb',
+    candidatePaths: ['/models/hoodie-classic.glb'],
+    fallbackPath: '/models/hoodie-classic.glb',
     description: 'Hoodie fleece lengkap dengan tudung 3D, kantong kanguru, & lengan panjang.',
   },
 ]
@@ -215,6 +229,8 @@ export const useConfiguratorStore = create((set) => ({
   activeTab: 'upload', // 'upload' | 'artwork' | 'color' | 'background' | 'motion' | 'effects' | 'export'
   workspaceMode: 'split', // 'split' (3D + 2D) | '3d' (Full 3D Studio) | '2d' (Full 2D Canvas)
   garmentStyle: 'regular', // 'regular' | 'oversized' | 'hoodie'
+  customModels: {}, // { regular: { url, format, fileName }, oversized: { url, format, fileName }, ... }
+  activeModelLabel: '',
   cameraView: 'front', // 'front' | 'back' | 'left_sleeve' | 'right_sleeve'
   cameraZoom: 1.0,
   cameraResetTrigger: 0,
@@ -228,6 +244,16 @@ export const useConfiguratorStore = create((set) => ({
   setActiveTab: (activeTab) => set({ activeTab }),
   setWorkspaceMode: (workspaceMode) => set({ workspaceMode }),
   setGarmentStyle: (garmentStyle) => set({ garmentStyle }),
+  setActiveModelLabel: (activeModelLabel) => set({ activeModelLabel }),
+
+  setCustomModelForStyle: (styleId, modelInfo) =>
+    set((state) => ({
+      garmentStyle: styleId,
+      customModels: {
+        ...state.customModels,
+        [styleId]: modelInfo,
+      },
+    })),
 
   setCameraView: (cameraView) => set({ cameraView }),
   setCameraZoom: (cameraZoom) =>

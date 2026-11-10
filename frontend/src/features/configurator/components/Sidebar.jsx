@@ -52,6 +52,36 @@ export default function Sidebar({
 
   const garmentStyle = useConfiguratorStore((s) => s.garmentStyle)
   const setGarmentStyle = useConfiguratorStore((s) => s.setGarmentStyle)
+  const activeModelLabel = useConfiguratorStore((s) => s.activeModelLabel)
+  const setCustomModelForStyle = useConfiguratorStore((s) => s.setCustomModelForStyle)
+
+  const handleCustom3DModelUpload = (event) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    const ext = file.name.split('.').pop()?.toLowerCase() || ''
+    if (!['fbx', 'glb', 'gltf'].includes(ext)) {
+      alert('Format model 3D harus .FBX, .GLB, atau .GLTF')
+      event.target.value = ''
+      return
+    }
+
+    const lowerName = file.name.toLowerCase()
+    const targetStyle = lowerName.includes('oversize')
+      ? 'oversized'
+      : lowerName.includes('hoodie')
+        ? 'hoodie'
+        : garmentStyle
+
+    const objectUrl = URL.createObjectURL(file)
+    setCustomModelForStyle(targetStyle, {
+      url: objectUrl,
+      format: ext === 'fbx' ? 'fbx' : 'glb',
+      fileName: file.name,
+    })
+
+    event.target.value = ''
+  }
 
   const background = useConfiguratorStore((s) => s.background)
   const setBackgroundPreset = useConfiguratorStore((s) => s.setBackgroundPreset)
@@ -235,7 +265,12 @@ export default function Sidebar({
             </div>
 
             <div className="sidebar-block">
-              <label className="sidebar-label">Pilih Model Pakaian 3D</label>
+              <div className="sidebar-row-between">
+                <label className="sidebar-label">Pilih Model Pakaian 3D</label>
+                {activeModelLabel && (
+                  <span className="sidebar-badge">{activeModelLabel}</span>
+                )}
+              </div>
               <div className="garment-model-grid">
                 {GARMENT_MODELS.map((model) => (
                   <button
@@ -250,6 +285,18 @@ export default function Sidebar({
                   </button>
                 ))}
               </div>
+              <label className="upload-browse-btn full-width" style={{ marginTop: '6px' }}>
+                📦 Pilih File Model 3D (.FBX / .GLB)
+                <input
+                  type="file"
+                  accept=".fbx,.glb,.gltf"
+                  hidden
+                  onChange={handleCustom3DModelUpload}
+                />
+              </label>
+              <small className="sidebar-hint">
+                Mendukung <code>T SHIRT.fbx</code> &amp; <code>oversized_t-shirt.glb</code> secara otomatis dari <code>public/models/</code> atau pilih langsung dari komputer.
+              </small>
             </div>
 
             <div className="sidebar-block">
