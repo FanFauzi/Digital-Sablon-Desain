@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\ShirtVariant;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -45,13 +46,17 @@ class ProjectController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $this->validateProject($request);
+        $editorState = $this->normalizeEditorStateAssets(
+            $request->user(),
+            $validated['editor_state']
+        );
 
         $project = $request->user()->projects()->create([
             'shirt_variant_id' => $validated['shirt_variant_id'] ?? null,
             'name' => trim($validated['name']),
             'status' => 'draft',
             'canvas_config' => $validated['canvas_config'],
-            'editor_state' => $validated['editor_state'],
+            'editor_state' => $editorState,
         ]);
 
         return response()->json([
@@ -72,12 +77,16 @@ class ProjectController extends Controller
     {
         $record = $request->user()->projects()->findOrFail($project);
         $validated = $this->validateProject($request);
+        $editorState = $this->normalizeEditorStateAssets(
+            $request->user(),
+            $validated['editor_state']
+        );
 
         $record->update([
             'shirt_variant_id' => $validated['shirt_variant_id'] ?? null,
             'name' => trim($validated['name']),
             'canvas_config' => $validated['canvas_config'],
-            'editor_state' => $validated['editor_state'],
+            'editor_state' => $editorState,
         ]);
 
         return response()->json([
@@ -147,5 +156,107 @@ class ProjectController extends Controller
         }
 
         return $validated;
+    }
+
+    private function normalizeEditorStateAssets(User $user, array $editorState): array
+    {
+        if (isset($editorState['sides']) && is_array($editorState['sides'])) {
+            foreach (['front', 'back'] as $side) {
+                if (isset($editorState['sides'][$side]) && is_array($editorState['sides'][$side])) {
+                    $editorState['sides'][$side] = $this->normalizeCanvasSnapshot(
+                        $user,
+                        $editorState['sides'][$side]
+                    );
+                }
+            }
+        }
+
+        if (isset($editorState['objects']) && is_array($editorState['objects'])) {
+            $editorState = $this->normalizeCanvasSnapshot($user, $editorState);
+        }
+
+        return $editorState;
+    }
+
+    private function normalizeCanvasSnapshot(User $user, array $snapshot): array
+    {
+        if (! isset($snapshot['objects']) || ! is_array($snapshot['objects'])) {
+            return $snapshot;
+        }
+
+        foreach ($snapshot['objects'] as $index => $object) {
+            if (! is_array($object)) {
+                continue;
+            }
+
+            $type = strtolower((string) ($object['type'] ?? ''));
+            if ($type !== 'image') {
+                continue;
+            }
+
+            $snapshot['objects'][$index] = $this->normalizeImageObject($user, $object);
+        }
+
+        return $snapshot;
+    }
+
+    private function normalizeImageObject(User $user, array $object): array
+    {
+        $src = is_string($object['src'] ?? null) ? trim($object['src']) : '';
+        $assetId = isset($object['uploadedAssetId']) && is_numeric($object['uploadedAssetId'])
+            ? (int) $object['uploadedAssetId']
+            : null;
+
+        if ($assetId === null && $src !== '') {
+            $assetId = $this->extractAssetIdFromPath($src);
+        }
+
+        if ($assetId === null && isset($object['assetUrl']) && is_string($object['assetUrl'])) {
+            $assetId = $this->extractAssetIdFromPath($object['assetUrl']);
+        }
+
+        if ($assetId !== null) {
+            $ownsAsset = $user->uploadedAssets()->whereKey($assetId)->exists();
+            if (! $ownsAsset) {
+                throw ValidationException::withMessages([
+                    'editor_state' => ['Aset gambar yang direferensikan tidak ditemukan atau bukan milik akun ini.'],
+                ]);
+            }
+
+            $contentPath = UploadedAssetController::assetContentPath($assetId);
+            $object['uploadedAssetId'] = $assetId;
+            $object['assetUrl'] = $contentPath;
+            $object['src'] = $contentPath;
+
+            return $object;
+        }
+
+        if (str_starts_with($src, 'data:image/')) {
+            $asset = UploadedAssetController::storeFromDataUrl(
+                $user,
+                $src,
+                is_string($object['editorName'] ?? null) ? $object['editorName'] : null
+            );
+
+            $contentPath = UploadedAssetController::assetContentPath($asset->id);
+            $object['uploadedAssetId'] = $asset->id;
+            $object['assetUrl'] = $contentPath;
+            $object['src'] = $contentPath;
+
+            return $object;
+        }
+
+        throw ValidationException::withMessages([
+            'editor_state' => ['Objek gambar pada proyek harus memiliki referensi file aset yang valid.'],
+        ]);
+    }
+
+    private function extractAssetIdFromPath(string $path): ?int
+    {
+        if (preg_match('#/api/v1/assets/(\d+)/content(?:\?.*)?$#', $path, $matches)) {
+            return (int) $matches[1];
+        }
+
+        return null;
     }
 }

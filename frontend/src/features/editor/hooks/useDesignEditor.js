@@ -8,6 +8,21 @@ import {
 
 import { EDITOR_CONFIG } from '../utils/editorConfig'
 import api from '../../../services/api'
+import {
+  buildAssetContentPath,
+  cacheAssetObjectUrl,
+  dataUrlToBlob,
+  extractAssetId,
+  fetchDesignAssetObjectUrl,
+  uploadDesignAsset,
+} from '../../../services/assetService'
+
+const SERIALIZED_OBJECT_PROPS = [
+  'editorId',
+  'editorName',
+  'uploadedAssetId',
+  'assetUrl',
+]
 
 function createPrintBoundary(printArea = EDITOR_CONFIG.printArea) {
   const boundary = new Rect({
@@ -328,6 +343,10 @@ export default function useDesignEditor(canvasElement) {
       throw new Error('Format gambar harus PNG atau JPG.')
     }
 
+    if (file.size > MAX_UPLOAD_SIZE_BYTES) {
+      throw new Error('Ukuran gambar maksimal 15 MB.')
+    }
+
     const url = URL.createObjectURL(file)
 
     try {
@@ -356,8 +375,19 @@ export default function useDesignEditor(canvasElement) {
         padding: 5,
       })
 
-      image.editorId = crypto.randomUUID()
+      const editorId = crypto.randomUUID()
+      image.editorId = editorId
       image.editorName = file.name
+      image.uploadedAssetId = null
+      image.assetUrl = null
+
+      imageAssetsRef.current.set(editorId, {
+        file,
+        objectUrl: url,
+        uploadedAssetId: null,
+        assetUrl: null,
+        originalName: file.name,
+      })
 
       canvas.add(image)
       canvas.setActiveObject(image)
@@ -365,8 +395,9 @@ export default function useDesignEditor(canvasElement) {
 
       syncSelectedObject(image)
       refreshLayers()
-    } finally {
+    } catch (error) {
       URL.revokeObjectURL(url)
+      throw error
     }
   }, [refreshLayers, syncSelectedObject])
 
@@ -530,18 +561,58 @@ export default function useDesignEditor(canvasElement) {
       throw new Error('Kanvas desain belum siap untuk disimpan.')
     }
 
-    const snapshot = canvas.toObject(['editorId', 'editorName'])
+    const snapshot = canvas.toObject(SERIALIZED_OBJECT_PROPS)
     const designObjects = canvas.getObjects()
       .filter((object) => !object.isPrintBoundary)
 
     snapshot.objects = await Promise.all(
       designObjects.map(async (object) => {
-        const serialized = object.toObject(['editorId', 'editorName'])
+        const serialized = object.toObject(SERIALIZED_OBJECT_PROPS)
 
-        // Blob URL tidak bertahan setelah halaman ditutup. Simpan gambar
-        // sebagai data URL agar proyek dapat dipulihkan setelah browser dibuka.
-        if (object.type === 'image' && typeof object.getElement === 'function') {
-          serialized.src = await imageElementToDataUrl(object.getElement())
+        if (String(object.type || '').toLowerCase() === 'image') {
+          const editorId = object.editorId || serialized.editorId || crypto.randomUUID()
+          object.editorId = editorId
+          serialized.editorId = editorId
+
+          const existingMeta = imageAssetsRef.current.get(editorId) || null
+          const assetId =
+            extractAssetId(object) ||
+            extractAssetId(serialized) ||
+            existingMeta?.uploadedAssetId ||
+            null
+
+          if (assetId) {
+            const contentPath = buildAssetContentPath(assetId)
+            object.uploadedAssetId = assetId
+            object.assetUrl = contentPath
+            serialized.uploadedAssetId = assetId
+            serialized.assetUrl = contentPath
+          }
+
+          if (existingMeta?.objectUrl) {
+            serialized.src = existingMeta.objectUrl
+          } else if (
+            typeof serialized.src === 'string' &&
+            (serialized.src.startsWith('blob:') ||
+              serialized.src.startsWith('data:image/') ||
+              extractAssetId(serialized.src))
+          ) {
+            // Gunakan src yang sudah ada tanpa merender ulang ke Base64 PNG.
+          } else if (typeof object.getElement === 'function') {
+            const blob = await imageElementToBlob(object.getElement())
+            const objectUrl = URL.createObjectURL(blob)
+
+            imageAssetsRef.current.set(editorId, {
+              file: blob,
+              objectUrl,
+              uploadedAssetId: assetId,
+              assetUrl: assetId ? buildAssetContentPath(assetId) : null,
+              originalName: object.editorName || 'design-image.png',
+            })
+
+            serialized.src = objectUrl
+          }
+
           serialized.crossOrigin = undefined
         }
 
@@ -551,6 +622,73 @@ export default function useDesignEditor(canvasElement) {
     snapshot.background = '#ffffff'
 
     return snapshot
+  }, [])
+
+  const hydrateSnapshotForCanvas = useCallback(async (snapshot) => {
+    if (!snapshot || !Array.isArray(snapshot.objects)) {
+      return snapshot
+    }
+
+    const hydratedObjects = await Promise.all(
+      snapshot.objects.map(async (object) => {
+        if (!object || String(object.type || '').toLowerCase() !== 'image') {
+          return object
+        }
+
+        const editorId = object.editorId || crypto.randomUUID()
+        const existingMeta = imageAssetsRef.current.get(editorId) || null
+        const assetId = extractAssetId(object) || existingMeta?.uploadedAssetId || null
+
+        if (existingMeta?.objectUrl) {
+          if (assetId && !existingMeta.uploadedAssetId) {
+            existingMeta.uploadedAssetId = assetId
+            existingMeta.assetUrl = buildAssetContentPath(assetId)
+          }
+
+          return {
+            ...object,
+            editorId,
+            uploadedAssetId: assetId || existingMeta.uploadedAssetId || null,
+            assetUrl: assetId ? buildAssetContentPath(assetId) : existingMeta.assetUrl || null,
+            src: existingMeta.objectUrl,
+            crossOrigin: undefined,
+          }
+        }
+
+        if (assetId) {
+          const objectUrl = await fetchDesignAssetObjectUrl(assetId)
+          const contentPath = buildAssetContentPath(assetId)
+
+          imageAssetsRef.current.set(editorId, {
+            file: null,
+            objectUrl,
+            uploadedAssetId: assetId,
+            assetUrl: contentPath,
+            originalName: object.editorName || 'design-image.png',
+          })
+
+          return {
+            ...object,
+            editorId,
+            uploadedAssetId: assetId,
+            assetUrl: contentPath,
+            src: objectUrl,
+            crossOrigin: undefined,
+          }
+        }
+
+        return {
+          ...object,
+          editorId,
+          crossOrigin: undefined,
+        }
+      })
+    )
+
+    return {
+      ...snapshot,
+      objects: hydratedObjects,
+    }
   }, [])
 
   const applyCanvasSnapshot = useCallback(async (snapshot) => {
@@ -568,7 +706,8 @@ export default function useDesignEditor(canvasElement) {
         throw new Error('Data desain pada sisi ini tidak valid.')
       }
 
-      await canvas.loadFromJSON(snapshot)
+      const hydratedSnapshot = await hydrateSnapshotForCanvas(snapshot)
+      await canvas.loadFromJSON(hydratedSnapshot)
     }
 
     canvas.backgroundColor = '#ffffff'
@@ -581,25 +720,150 @@ export default function useDesignEditor(canvasElement) {
     setSelectedObject(null)
     refreshLayers()
     refreshDesignPreview()
-  }, [refreshDesignPreview, refreshLayers])
+  }, [hydrateSnapshotForCanvas, refreshDesignPreview, refreshLayers])
+
+  const prepareSnapshotForCloud = useCallback(async (snapshot, isCurrentActiveSide = false) => {
+    if (!snapshot || !Array.isArray(snapshot.objects)) {
+      return {
+        memorySnapshot: snapshot,
+        cloudSnapshot: snapshot,
+      }
+    }
+
+    const canvas = canvasRef.current
+    const memoryObjects = []
+    const cloudObjects = []
+
+    for (const object of snapshot.objects) {
+      if (!object || String(object.type || '').toLowerCase() !== 'image') {
+        memoryObjects.push(object)
+        cloudObjects.push(object)
+        continue
+      }
+
+      const editorId = object.editorId || crypto.randomUUID()
+      const existingMeta = imageAssetsRef.current.get(editorId) || null
+      let assetId = extractAssetId(object) || existingMeta?.uploadedAssetId || null
+
+      if (!assetId) {
+        let blobToUpload = existingMeta?.file instanceof Blob ? existingMeta.file : null
+
+        if (!blobToUpload && typeof object.src === 'string') {
+          if (object.src.startsWith('data:image/')) {
+            blobToUpload = dataUrlToBlob(object.src)
+          } else if (object.src.startsWith('blob:')) {
+            const blobResponse = await fetch(object.src)
+            blobToUpload = await blobResponse.blob()
+          }
+        }
+
+        if (!blobToUpload && isCurrentActiveSide && canvas) {
+          const liveObject = canvas.getObjects().find((item) => item.editorId === editorId)
+          if (liveObject && typeof liveObject.getElement === 'function') {
+            blobToUpload = await imageElementToBlob(liveObject.getElement())
+          }
+        }
+
+        if (!blobToUpload) {
+          throw new Error('File gambar desain tidak ditemukan untuk diunggah ke server.')
+        }
+
+        const fileName =
+          object.editorName ||
+          existingMeta?.originalName ||
+          'design-image.png'
+
+        const uploadedAsset = await uploadDesignAsset(blobToUpload, fileName)
+        assetId = Number(uploadedAsset.id)
+
+        const contentPath = uploadedAsset.url || buildAssetContentPath(assetId)
+        const objectUrl = existingMeta?.objectUrl || URL.createObjectURL(blobToUpload)
+
+        cacheAssetObjectUrl(assetId, objectUrl, blobToUpload)
+        imageAssetsRef.current.set(editorId, {
+          file: blobToUpload,
+          objectUrl,
+          uploadedAssetId: assetId,
+          assetUrl: contentPath,
+          originalName: fileName,
+        })
+
+        if (isCurrentActiveSide && canvas) {
+          const liveObject = canvas.getObjects().find((item) => item.editorId === editorId)
+          if (liveObject) {
+            liveObject.uploadedAssetId = assetId
+            liveObject.assetUrl = contentPath
+          }
+        }
+      }
+
+      const contentPath = buildAssetContentPath(assetId)
+      const latestMeta = imageAssetsRef.current.get(editorId) || existingMeta
+
+      memoryObjects.push({
+        ...object,
+        editorId,
+        uploadedAssetId: assetId,
+        assetUrl: contentPath,
+        src: latestMeta?.objectUrl || object.src || contentPath,
+        crossOrigin: undefined,
+      })
+
+      cloudObjects.push({
+        ...object,
+        editorId,
+        uploadedAssetId: assetId,
+        assetUrl: contentPath,
+        src: contentPath,
+        crossOrigin: undefined,
+      })
+    }
+
+    return {
+      memorySnapshot: {
+        ...snapshot,
+        objects: memoryObjects,
+      },
+      cloudSnapshot: {
+        ...snapshot,
+        objects: cloudObjects,
+      },
+    }
+  }, [])
 
   // Format proyek versi 2 menyimpan canvas depan dan belakang secara terpisah.
+  // Gambar diunggah terpisah sebagai file aset agar payload JSON tidak memuat Base64 besar.
   const serializeCanvas = useCallback(async () => {
     const activeSide = activeSideRef.current
     const activeSnapshot = await serializeCurrentCanvas()
-    const sides = {
+    const rawSides = {
       ...sideSnapshotsRef.current,
       [activeSide]: activeSnapshot,
     }
 
-    sideSnapshotsRef.current = sides
+    const frontPrepared = await prepareSnapshotForCloud(
+      rawSides.front,
+      activeSide === 'front'
+    )
+    const backPrepared = await prepareSnapshotForCloud(
+      rawSides.back,
+      activeSide === 'back'
+    )
+
+    sideSnapshotsRef.current = {
+      front: frontPrepared.memorySnapshot,
+      back: backPrepared.memorySnapshot,
+    }
 
     return {
       schemaVersion: 2,
       activeSide,
-      sides,
+      sides: {
+        front: frontPrepared.cloudSnapshot,
+        back: backPrepared.cloudSnapshot,
+      },
     }
-  }, [serializeCurrentCanvas])
+  }, [prepareSnapshotForCloud, serializeCurrentCanvas])
 
   // Tetap mendukung proyek lama yang hanya menyimpan satu snapshot canvas.
   const restoreCanvas = useCallback(async (snapshot, preferredSide = 'front') => {

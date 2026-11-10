@@ -54,22 +54,43 @@ export async function getEditorProjects(shirtId) {
   )
 }
 
+function extractProjectApiError(error, fallbackMessage) {
+  const validationErrors = error.response?.data?.errors
+  if (validationErrors && typeof validationErrors === 'object') {
+    const firstFieldErrors = Object.values(validationErrors).find(
+      (messages) => Array.isArray(messages) && messages.length > 0
+    )
+    if (firstFieldErrors) {
+      return firstFieldErrors[0]
+    }
+  }
+
+  return error.response?.data?.message || error.message || fallbackMessage
+}
+
 export async function saveEditorProject(activeProjectId, payload) {
   let response
 
-  if (activeProjectId?.startsWith('cloud:')) {
-    const projectId = activeProjectId.slice('cloud:'.length)
-    response = await api.put(`/projects/${projectId}`, payload)
-  } else {
-    response = await api.post('/projects', payload)
+  try {
+    if (activeProjectId?.startsWith('cloud:')) {
+      const projectId = activeProjectId.slice('cloud:'.length)
+      response = await api.put(`/projects/${projectId}`, payload)
+    } else {
+      response = await api.post('/projects', payload)
 
-    // Proyek lokal lama baru dihapus setelah salinan server berhasil dibuat.
-    if (activeProjectId?.startsWith('local:')) {
-      const localId = activeProjectId.slice('local:'.length)
-      await deleteLocalProject(localId).catch((error) => {
-        console.warn('Proyek lokal masih tersimpan sebagai cadangan.', error)
-      })
+      // Proyek lokal lama baru dihapus setelah salinan server berhasil dibuat.
+      if (activeProjectId?.startsWith('local:')) {
+        const localId = activeProjectId.slice('local:'.length)
+        await deleteLocalProject(localId).catch((error) => {
+          console.warn('Proyek lokal masih tersimpan sebagai cadangan.', error)
+        })
+      }
     }
+  } catch (error) {
+    throw new Error(
+      extractProjectApiError(error, 'Gagal menyimpan proyek ke server.'),
+      { cause: error }
+    )
   }
 
   return normalizeCloudProject(response.data.data)
@@ -81,13 +102,20 @@ export async function loadEditorProject(project) {
     return { ...localProject, id: displayId, canvasState: project.canvasState }
   }
 
-  const response = await api.get(`/projects/${project.serverId}`)
-  const record = response.data.data
-  const normalized = normalizeCloudProject(record)
+  try {
+    const response = await api.get(`/projects/${project.serverId}`)
+    const record = response.data.data
+    const normalized = normalizeCloudProject(record)
 
-  return {
-    ...normalized,
-    canvasState: record.editor_state,
+    return {
+      ...normalized,
+      canvasState: record.editor_state,
+    }
+  } catch (error) {
+    throw new Error(
+      extractProjectApiError(error, 'Gagal membuka proyek dari server.'),
+      { cause: error }
+    )
   }
 }
 
@@ -96,5 +124,12 @@ export async function deleteEditorProject(project) {
     return deleteLocalProject(project.localId)
   }
 
-  await api.delete(`/projects/${project.serverId}`)
+  try {
+    await api.delete(`/projects/${project.serverId}`)
+  } catch (error) {
+    throw new Error(
+      extractProjectApiError(error, 'Gagal menghapus proyek dari server.'),
+      { cause: error }
+    )
+  }
 }

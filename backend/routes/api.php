@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ShirtController;
 use App\Http\Controllers\Api\V1\DesignAnalysisController;
 use App\Http\Controllers\Api\V1\ProjectController;
+use App\Http\Controllers\Api\V1\UploadedAssetController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -33,6 +34,10 @@ Route::prefix('v1')->group(function () {
     ])->whereNumber('id');
 
     Route::middleware('auth:sanctum')->group(function () {
+        Route::post('/assets', [UploadedAssetController::class, 'store']);
+        Route::get('/assets/{asset}/content', [UploadedAssetController::class, 'showContent'])
+            ->whereNumber('asset');
+
         Route::get('/projects', [ProjectController::class, 'index']);
         Route::get('/projects/{project}', [ProjectController::class, 'show'])->whereNumber('project');
         Route::post('/projects', [ProjectController::class, 'store']);

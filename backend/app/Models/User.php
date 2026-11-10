@@ -24,6 +24,11 @@ class User extends Authenticatable
         return $this->hasMany(Project::class);
     }
 
+    public function uploadedAssets(): HasMany
+    {
+        return $this->hasMany(UploadedAsset::class);
+    }
+
     /**
      * Get the attributes that should be cast.
      *
