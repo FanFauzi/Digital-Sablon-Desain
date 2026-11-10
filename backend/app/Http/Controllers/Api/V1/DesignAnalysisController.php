@@ -21,16 +21,16 @@ class DesignAnalysisController extends Controller
             'image' => ['required', 'file', 'image', 'mimes:png,jpg,jpeg,webp', 'max:10240'],
         ]);
 
-        $apiKey = config('services.gemini.api_key');
-        $configuredModel = trim((string) config('services.gemini.model', 'gemini-2.5-flash'));
-        if (in_array($configuredModel, ['', 'gemini-3.8-flash', 'gemini-3.6-flash'], true)) {
-            $configuredModel = 'gemini-2.5-flash';
+        $apiKey = trim((string) config('services.gemini.api_key'), " \t\n\r\0\x0B\"'");
+        $configuredModel = trim((string) config('services.gemini.model', 'gemini-3.8-flash'));
+        if (in_array($configuredModel, ['', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'], true)) {
+            $configuredModel = 'gemini-3.8-flash';
         }
 
-        if (!$apiKey) {
+        if ($apiKey === '') {
             return response()->json([
                 'success' => false,
-                'message' => 'Gemini API belum dikonfigurasi. Tambahkan GEMINI_API_KEY pada backend.',
+                'message' => 'Gemini API belum dikonfigurasi. Tambahkan GEMINI_API_KEY pada file backend/.env lalu jalankan php artisan optimize:clear.',
             ], 503);
         }
 
@@ -97,11 +97,12 @@ PROMPT;
                 ],
             ];
 
-            // Coba model utama terlebih dahulu, lalu fallback ke model multimodal stabil.
+            // Coba model utama (3.8 Flash), lalu fallback ke 3.6 Flash dan 3.5 Flash-Lite.
             $modelsToTry = array_values(array_unique([
                 $configuredModel,
-                'gemini-2.5-flash',
-                'gemini-2.0-flash',
+                'gemini-3.8-flash',
+                'gemini-3.6-flash',
+                'gemini-3.5-flash-lite',
             ]));
             $retryableStatuses = [429, 500, 502, 503, 504];
             $response = null;
@@ -114,9 +115,10 @@ PROMPT;
                 for ($attempt = 1; $attempt <= 2; $attempt++) {
                     try {
                         $attemptResponse = Http::acceptJson()
+                            ->when(app()->environment('local'), fn ($http) => $http->withoutVerifying())
                             ->withHeaders(['x-goog-api-key' => $apiKey])
                             ->connectTimeout(10)
-                            ->timeout(25)
+                            ->timeout(30)
                             ->post(
                                 "https://generativelanguage.googleapis.com/v1beta/models/{$candidateModel}:generateContent",
                                 $payload
@@ -147,19 +149,24 @@ PROMPT;
                     }
 
                     $status = $response->status();
+                    $errorMessage = (string) ($response->json('error.message') ?? '');
                     Log::notice('Gemini returned an error during design analysis.', [
                         'model' => $candidateModel,
                         'attempt' => $attempt,
                         'status' => $status,
-                        'body' => $response->json('error.message'),
+                        'body' => $errorMessage,
                     ]);
 
-                    // Jika nama model tidak ditemukan (404), lanjutkan ke model cadangan berikutnya.
-                    if ($status === 404) {
+                    // Jika API key tidak valid, hentikan lebih awal agar pengguna mendapat pesan yang jelas.
+                    if ($status === 400 && str_contains(strtolower($errorMessage), 'api key')) {
+                        break 2;
+                    }
+
+                    // Jika model tidak tersedia untuk akun ini (404 / 403 / 400 model error), coba model cadangan berikutnya.
+                    if (in_array($status, [400, 403, 404], true)) {
                         break;
                     }
 
-                    // Jangan pindah model untuk kesalahan autentikasi atau payload tidak valid.
                     if (!in_array($status, $retryableStatuses, true) || $status === 429) {
                         break 2;
                     }
@@ -175,10 +182,11 @@ PROMPT;
             if (!$response || !$response->successful()) {
                 if ($response) {
                     $status = $response->status();
+                    $upstreamError = trim((string) ($response->json('error.message') ?? ''));
                     Log::warning('Gemini design analysis failed after retries.', [
                         'model' => $usedModel,
                         'status' => $status,
-                        'body' => $response->json('error.message'),
+                        'body' => $upstreamError,
                     ]);
 
                     if ($status === 429) {
@@ -195,9 +203,20 @@ PROMPT;
                         ], 503);
                     }
 
+                    if (str_contains(strtolower($upstreamError), 'api key')) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'GEMINI_API_KEY pada backend/.env tidak valid. Periksa kembali API key Anda lalu jalankan php artisan optimize:clear.',
+                        ], 502);
+                    }
+
+                    $detailSuffix = (app()->environment('local') && $upstreamError !== '')
+                        ? " (Detail: {$upstreamError})"
+                        : '';
+
                     return response()->json([
                         'success' => false,
-                        'message' => 'Layanan AI gagal menganalisis gambar. Periksa konfigurasi Gemini dan coba lagi.',
+                        'message' => 'Layanan AI gagal menganalisis gambar. Periksa konfigurasi Gemini dan coba lagi.' . $detailSuffix,
                     ], 502);
                 }
 
