@@ -63,6 +63,7 @@ export default function EditorToolbar({ editor, exportOptions }) {
               shirtType: exportOptions?.shirtType,
               currentSide: exportOptions?.side,
               currentColor: exportOptions?.selectedColor,
+              projectId: exportOptions?.projectId,
             })
             .catch((error) => {
               alert(error.message || 'Pilih gambar terlebih dahulu untuk dianalisis.')

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\Project;
 use App\Models\ShirtVariant;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -24,6 +25,7 @@ class ProjectController extends Controller
                 'created_at',
                 'updated_at',
             ])
+            ->withCount(['designObjects', 'exportFiles'])
             ->latest('updated_at')
             ->get();
 
@@ -35,7 +37,10 @@ class ProjectController extends Controller
 
     public function show(Request $request, int $project): JsonResponse
     {
-        $record = $request->user()->projects()->findOrFail($project);
+        $record = $request->user()
+            ->projects()
+            ->with(['designObjects', 'exportFiles'])
+            ->findOrFail($project);
 
         return response()->json([
             'success' => true,
@@ -58,6 +63,8 @@ class ProjectController extends Controller
             'canvas_config' => $validated['canvas_config'],
             'editor_state' => $editorState,
         ]);
+
+        $this->syncDesignObjects($project, $editorState);
 
         return response()->json([
             'success' => true,
@@ -89,6 +96,8 @@ class ProjectController extends Controller
             'editor_state' => $editorState,
         ]);
 
+        $this->syncDesignObjects($record, $editorState);
+
         return response()->json([
             'success' => true,
             'message' => 'Perubahan proyek berhasil disimpan.',
@@ -112,6 +121,38 @@ class ProjectController extends Controller
             'success' => true,
             'message' => 'Proyek berhasil dihapus dari server.',
         ]);
+    }
+
+    public function recordExport(Request $request, int $project): JsonResponse
+    {
+        $record = $request->user()->projects()->findOrFail($project);
+
+        $validated = $request->validate([
+            'file_name' => ['required', 'string', 'max:255'],
+            'format' => ['nullable', 'string', 'max:20'],
+            'width_cm' => ['nullable', 'numeric', 'min:0.1', 'max:500'],
+            'height_cm' => ['nullable', 'numeric', 'min:0.1', 'max:500'],
+            'dpi' => ['nullable', 'integer', 'min:72', 'max:600'],
+            'pixel_width' => ['nullable', 'integer', 'min:1', 'max:20000'],
+            'pixel_height' => ['nullable', 'integer', 'min:1', 'max:20000'],
+        ]);
+
+        $exportFile = $record->exportFiles()->create([
+            'file_name' => $validated['file_name'],
+            'file_path' => 'client-download/' . $validated['file_name'],
+            'format' => strtolower((string) ($validated['format'] ?? 'png')),
+            'width_cm' => $validated['width_cm'] ?? null,
+            'height_cm' => $validated['height_cm'] ?? null,
+            'dpi' => $validated['dpi'] ?? 300,
+            'pixel_width' => $validated['pixel_width'] ?? null,
+            'pixel_height' => $validated['pixel_height'] ?? null,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Metadata hasil ekspor berhasil dicatat.',
+            'data' => $exportFile,
+        ], 201);
     }
 
     private function validateProject(Request $request): array
@@ -258,5 +299,65 @@ class ProjectController extends Controller
         }
 
         return null;
+    }
+
+    private function syncDesignObjects(Project $project, array $editorState): void
+    {
+        $project->designObjects()->delete();
+
+        $sideGroups = [];
+
+        if (isset($editorState['sides']) && is_array($editorState['sides'])) {
+            foreach (['front', 'back'] as $side) {
+                $objects = $editorState['sides'][$side]['objects'] ?? [];
+                if (is_array($objects)) {
+                    $sideGroups[$side] = $objects;
+                }
+            }
+        } elseif (isset($editorState['objects']) && is_array($editorState['objects'])) {
+            $activeSide = is_string($editorState['activeSide'] ?? null) ? $editorState['activeSide'] : 'front';
+            $sideGroups[$activeSide] = $editorState['objects'];
+        }
+
+        foreach ($sideGroups as $side => $objects) {
+            foreach ($objects as $index => $object) {
+                if (! is_array($object)) {
+                    continue;
+                }
+
+                $type = strtolower((string) ($object['type'] ?? 'unknown'));
+                $assetId = isset($object['uploadedAssetId']) && is_numeric($object['uploadedAssetId'])
+                    ? (int) $object['uploadedAssetId']
+                    : null;
+
+                $scaleX = is_numeric($object['scaleX'] ?? null) ? (float) $object['scaleX'] : 1.0;
+                $scaleY = is_numeric($object['scaleY'] ?? null) ? (float) $object['scaleY'] : 1.0;
+                $rawWidth = is_numeric($object['width'] ?? null) ? (float) $object['width'] : 100.0;
+                $rawHeight = is_numeric($object['height'] ?? null) ? (float) $object['height'] : 100.0;
+
+                $project->designObjects()->create([
+                    'uploaded_asset_id' => $assetId,
+                    'object_type' => substr($type, 0, 50),
+                    'object_name' => substr((string) ($object['editorName'] ?? ucfirst($type) . ' ' . ($index + 1)), 0, 255),
+                    'position_x' => is_numeric($object['left'] ?? null) ? round((float) $object['left'], 2) : 0,
+                    'position_y' => is_numeric($object['top'] ?? null) ? round((float) $object['top'], 2) : 0,
+                    'object_width' => round($rawWidth * abs($scaleX), 2),
+                    'object_height' => round($rawHeight * abs($scaleY), 2),
+                    'rotation' => is_numeric($object['angle'] ?? null) ? round((float) $object['angle'], 2) : 0,
+                    'scale_x' => round($scaleX, 3),
+                    'scale_y' => round($scaleY, 3),
+                    'layer_order' => (int) $index,
+                    'properties' => [
+                        'side' => $side,
+                        'editor_id' => $object['editorId'] ?? null,
+                        'text' => $object['text'] ?? null,
+                        'font_family' => $object['fontFamily'] ?? null,
+                        'font_size' => $object['fontSize'] ?? null,
+                        'font_weight' => $object['fontWeight'] ?? null,
+                        'fill' => $object['fill'] ?? null,
+                    ],
+                ]);
+            }
+        }
     }
 }

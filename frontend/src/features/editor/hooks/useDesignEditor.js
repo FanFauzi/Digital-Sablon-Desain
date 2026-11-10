@@ -244,6 +244,9 @@ export default function useDesignEditor(canvasElement) {
       return
     }
 
+    const type = String(object.type || '').toLowerCase()
+    const isText = type === 'i-text' || type === 'text' || type === 'textbox'
+
     setSelectedObject({
       id: object.editorId,
       name: object.editorName,
@@ -253,11 +256,21 @@ export default function useDesignEditor(canvasElement) {
       height: Math.round(object.getScaledHeight()),
       angle: Math.round(object.angle || 0),
       type: object.type,
+      ...(isText
+        ? {
+            text: typeof object.text === 'string' ? object.text : '',
+            fill: typeof object.fill === 'string' ? object.fill : '#171717',
+            fontFamily: object.fontFamily || 'Arial',
+            fontSize: Math.round(object.fontSize || 65),
+            fontWeight: object.fontWeight || 'bold',
+          }
+        : {}),
     })
   }, [])
 
   const [designPreview, setDesignPreview] = useState(null)
   const [designPreviewVersion, setDesignPreviewVersion] = useState(0)
+  const [sidePreviews, setSidePreviews] = useState({ front: null, back: null })
 
   const refreshDesignPreview = useCallback(() => {
     const canvas = canvasRef.current
@@ -266,8 +279,20 @@ export default function useDesignEditor(canvasElement) {
     const { left, top, width, height } = printAreaRef.current
     const previousBackground = canvas.backgroundColor
     const printBoundaries = canvas.getObjects().filter((object) => object.isPrintBoundary)
+    const hasDesignObjects = canvas.getObjects().some((object) => !object.isPrintBoundary)
+    const currentSide = activeSideRef.current || 'front'
 
     try {
+      if (!hasDesignObjects) {
+        setDesignPreview(null)
+        setSidePreviews((prev) => ({
+          ...prev,
+          [currentSide]: null,
+        }))
+        setDesignPreviewVersion((version) => version + 1)
+        return
+      }
+
       // Preview transparan hanya berisi desain di area cetak tanpa garis putus-putus batas cetak.
       canvas.backgroundColor = ''
       printBoundaries.forEach((boundary) => {
@@ -284,6 +309,10 @@ export default function useDesignEditor(canvasElement) {
         enableRetinaScaling: false,
       })
       setDesignPreview(preview)
+      setSidePreviews((prev) => ({
+        ...prev,
+        [currentSide]: preview,
+      }))
       setDesignPreviewVersion((version) => version + 1)
     } finally {
       printBoundaries.forEach((boundary) => {
@@ -332,6 +361,18 @@ export default function useDesignEditor(canvasElement) {
       refreshLayers()
     }
 
+    const handleTextChanged = (event) => {
+      const object = event?.target || canvas.getActiveObject()
+      if (object && typeof object.text === 'string') {
+        object.editorName = object.text.trim().slice(0, 28) || 'Teks'
+      }
+      if (object && canvas.getActiveObject() === object) {
+        syncSelectedObject(object)
+      }
+      refreshLayers()
+      refreshDesignPreview()
+    }
+
     canvas.on('selection:created', handleSelection)
     canvas.on('selection:updated', handleSelection)
     canvas.on('selection:cleared', handleSelectionCleared)
@@ -345,8 +386,8 @@ export default function useDesignEditor(canvasElement) {
     canvas.on('object:added', refreshDesignPreview)
     canvas.on('object:removed', refreshLayers)
     canvas.on('object:removed', refreshDesignPreview)
-    canvas.on('text:changed', refreshDesignPreview)
-    canvas.on('text:editing:exited', refreshDesignPreview)
+    canvas.on('text:changed', handleTextChanged)
+    canvas.on('text:editing:exited', handleTextChanged)
 
     return () => {
       canvas.dispose()
@@ -526,6 +567,22 @@ export default function useDesignEditor(canvasElement) {
 
     if (!canvas || !active || active.isPrintBoundary) return
 
+    if (['text', 'fill', 'fontFamily', 'fontWeight'].includes(property)) {
+      const stringValue = String(value ?? '')
+      active.set(property, stringValue)
+
+      if (property === 'text') {
+        active.editorName = stringValue.trim().slice(0, 28) || 'Teks'
+        refreshLayers()
+      }
+
+      active.setCoords()
+      canvas.requestRenderAll()
+      syncSelectedObject(active)
+      refreshDesignPreview()
+      return
+    }
+
     const number = Number(value)
     if (!Number.isFinite(number)) return
 
@@ -542,6 +599,9 @@ export default function useDesignEditor(canvasElement) {
         scaleX: active.scaleX * ratio,
         scaleY: active.scaleY * ratio,
       })
+    } else if (property === 'fontSize') {
+      const clampedSize = Math.min(300, Math.max(10, number))
+      active.set('fontSize', clampedSize)
     } else {
       active.set(property, number)
     }
@@ -550,7 +610,7 @@ export default function useDesignEditor(canvasElement) {
     canvas.requestRenderAll()
     syncSelectedObject(active)
     refreshDesignPreview()
-  }, [refreshDesignPreview, syncSelectedObject])
+  }, [refreshDesignPreview, refreshLayers, syncSelectedObject])
 
   const setPrintArea = useCallback((printAreaData) => {
     const canvas = canvasRef.current
@@ -963,6 +1023,10 @@ export default function useDesignEditor(canvasElement) {
   const resetSideDesigns = useCallback(async (frontPrintArea) => {
     sideSnapshotsRef.current = { front: null, back: null }
     activeSideRef.current = 'front'
+    setSidePreviews({ front: null, back: null })
+    setDesignPreview(null)
+    setAnalysis(null)
+    setAnalysisError('')
     await applyCanvasSnapshot(null)
 
     if (frontPrintArea) setPrintArea(frontPrintArea)
@@ -1094,6 +1158,7 @@ export default function useDesignEditor(canvasElement) {
       shirtType = 'tshirt',
       currentSide = activeSideRef.current,
       currentColor = '#ffffff',
+      projectId = null,
     } = options
 
     const objectEditorId = targetImage.editorId || null
@@ -1156,6 +1221,16 @@ export default function useDesignEditor(canvasElement) {
       formData.append('current_side', String(currentSide || activeSideRef.current || 'front'))
       formData.append('current_color', String(currentColor || '#ffffff'))
 
+      const numericProjectId = Number(projectId)
+      if (Number.isInteger(numericProjectId) && numericProjectId > 0) {
+        formData.append('project_id', String(numericProjectId))
+      }
+
+      const assetId = extractAssetId(targetImage) || imageAssetsRef.current.get(objectEditorId)?.uploadedAssetId
+      if (Number.isInteger(Number(assetId)) && Number(assetId) > 0) {
+        formData.append('uploaded_asset_id', String(Number(assetId)))
+      }
+
       const response = await api.post('/designs/analyze', formData)
       const result = response.data.data
 
@@ -1186,7 +1261,7 @@ export default function useDesignEditor(canvasElement) {
       throw new Error('Kanvas desain belum siap.')
     }
 
-    const { printArea, shirtName = 'desain', side = 'front' } = options
+    const { printArea, shirtName = 'desain', side = 'front', projectId = null } = options
     const physicalWidthCm = Number(printArea?.physical_width_cm)
     const physicalHeightCm = Number(printArea?.physical_height_cm)
     const dpi = Number(printArea?.dpi) || 300
@@ -1295,6 +1370,23 @@ export default function useDesignEditor(canvasElement) {
       link.remove()
       window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
 
+      const numericProjectId = Number(projectId)
+      if (Number.isInteger(numericProjectId) && numericProjectId > 0) {
+        api
+          .post(`/projects/${numericProjectId}/exports`, {
+            file_name: fileName,
+            format: 'png',
+            width_cm: physicalWidthCm,
+            height_cm: physicalHeightCm,
+            dpi,
+            pixel_width: pixelWidth,
+            pixel_height: pixelHeight,
+          })
+          .catch(() => {
+            // Pencatatan riwayat ekspor bersifat non-blocking.
+          })
+      }
+
       return {
         fileName,
         pixelWidth,
@@ -1343,6 +1435,7 @@ return {
   analysis,
   designPreview,
   designPreviewVersion,
+  sidePreviews,
   setPrintArea,
   serializeCanvas,
   restoreCanvas,

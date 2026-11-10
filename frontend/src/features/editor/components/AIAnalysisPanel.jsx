@@ -80,6 +80,7 @@ export default function AIAnalysisPanel({ editor, productContext = {} }) {
         shirtType: productContext.shirtType,
         currentSide: productContext.selectedSide,
         currentColor: productContext.selectedColor,
+        projectId: productContext.projectId,
       })
       if (result?.recommendations?.placement) {
         setActiveOptionCode(result.recommendations.placement.position_code || 'primary')

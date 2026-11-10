@@ -45,5 +45,7 @@ Route::prefix('v1')->group(function () {
             ->whereNumber('project');
         Route::delete('/projects/{project}', [ProjectController::class, 'destroy'])
             ->whereNumber('project');
+        Route::post('/projects/{project}/exports', [ProjectController::class, 'recordExport'])
+            ->whereNumber('project');
     });
 });

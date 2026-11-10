@@ -350,6 +350,7 @@ export default function EditorPage() {
           selectedColor,
           printArea,
           isSwitchingSide,
+          projectId: activeProjectId,
         }}
       />
 
@@ -382,6 +383,7 @@ export default function EditorPage() {
               productType={shirt.type}
               designPreview={editor.designPreview}
               designPreviewVersion={editor.designPreviewVersion}
+              sidePreviews={editor.sidePreviews}
             />
 
             <p className="preview-product-name">
@@ -585,6 +587,7 @@ export default function EditorPage() {
           <AIAnalysisPanel
             editor={editor}
             productContext={{
+              projectId: activeProjectId,
               shirtType: shirt?.type,
               selectedSide,
               selectedColor,

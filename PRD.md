@@ -600,13 +600,15 @@ Integrasi tambahan:
 | POST | `/api/v1/auth/login` | Login |
 | GET | `/api/v1/auth/me` | Informasi pengguna aktif |
 | POST | `/api/v1/auth/logout` | Logout |
+| POST | `/api/v1/designs/analyze` | Analisis gambar multimodal & rekomendasi penempatan AI |
 | POST | `/api/v1/assets` | Mengunggah file gambar desain terpisah |
 | GET | `/api/v1/assets/{asset}/content` | Mengambil konten file gambar milik pengguna |
 | GET | `/api/v1/projects` | Daftar proyek |
-| GET | `/api/v1/projects/{id}` | Detail proyek |
-| POST | `/api/v1/projects` | Membuat proyek |
-| PUT | `/api/v1/projects/{id}` | Memperbarui proyek |
+| GET | `/api/v1/projects/{id}` | Detail proyek beserta objek desain & riwayat ekspor |
+| POST | `/api/v1/projects` | Membuat proyek & menyinkronkan `design_objects` |
+| PUT | `/api/v1/projects/{id}` | Memperbarui proyek & menyinkronkan `design_objects` |
 | DELETE | `/api/v1/projects/{id}` | Menghapus proyek |
+| POST | `/api/v1/projects/{id}/exports` | Mencatat metadata file PNG hasil ekspor ke `export_files` |
 
 ---
 
@@ -621,12 +623,12 @@ Integrasi tambahan:
 | shirt_variants | Menyimpan varian warna dan ukuran |
 | print_areas | Menyimpan area cetak produk |
 | projects | Menyimpan proyek desain pengguna |
-| uploaded_assets | Struktur penyimpanan metadata file gambar |
-| design_objects | Struktur penyimpanan objek desain |
-| ai_analysis_runs | Struktur riwayat analisis AI |
-| ai_recommendations | Struktur rekomendasi AI |
+| uploaded_assets | Menyimpan metadata file gambar desain di disk server |
+| design_objects | Menyimpan objek desain ternormalisasi per proyek (`image`, `i-text`, koordinat, skala, rotasi, layer) |
+| ai_analysis_runs | Menyimpan riwayat eksekusi analisis multimodal Gemini |
+| ai_recommendations | Menyimpan opsi rekomendasi penempatan AI per analisis |
 | tryon_sessions | Struktur sesi virtual try-on |
-| export_files | Struktur metadata hasil ekspor |
+| export_files | Menyimpan metadata hasil ekspor PNG beresolusi produksi |
 
 ## 8.2 Relasi Data
 
@@ -640,9 +642,10 @@ Integrasi tambahan:
 
 ## 8.3 Struktur Penyimpanan Proyek
 
-Data proyek saat ini menggunakan:
+Data proyek menggunakan:
 - `canvas_config` untuk konfigurasi produk.
 - `editor_state` untuk snapshot desain dengan referensi file aset (`uploadedAssetId` dan `assetUrl`).
+- Sinkronisasi otomatis ke tabel `design_objects` setiap kali proyek disimpan atau diperbarui.
 
 Struktur multi-side:
 
@@ -669,3 +672,72 @@ Struktur multi-side:
   }
 }
 ```
+
+---
+
+# 9. STATUS IMPLEMENTASI FITUR
+
+| Kode | Fitur | Status |
+|---|---|---|
+| FR-001 | Landing Page | Selesai |
+| FR-002 | Katalog Produk | Selesai |
+| FR-003 | Detail Produk | Selesai |
+| FR-004 | Registrasi | Selesai |
+| FR-005 | Login | Selesai |
+| FR-006 | Logout | Selesai |
+| FR-007 | Proteksi Halaman | Selesai |
+| FR-008 | Konfigurasi Produk | Selesai |
+| FR-009 | Editor Canvas | Selesai |
+| FR-010 | Upload Image | Selesai |
+| FR-011 | Add & Edit Text Properties | Selesai |
+| FR-012 | Object Transformation | Selesai |
+| FR-013 | Layer Management | Selesai |
+| FR-014 | Print Area Boundary | Selesai |
+| FR-015 | Pemisahan Front/Back | Selesai |
+| FR-016 | 3D Preview (Simultan Depan & Belakang) | Selesai |
+| FR-017 | Print Area Dimension | Selesai |
+| FR-018 | Export PNG dengan DPI (Tanpa Garis Batas) | Selesai |
+| FR-019 | Export Validation | Selesai |
+| FR-020 | Save Project | Selesai |
+| FR-021 | Load Project | Selesai |
+| FR-022 | Delete Project | Selesai |
+| FR-023 | Cloud Project Storage (`uploaded_assets`) | Selesai |
+| FR-024 | AI Design Analysis (Gemini Multimodal) | Selesai |
+| FR-025 | AI Placement & Color Recommendation (Auto-Apply + Multi-Option) | Selesai |
+| FR-026 | AI Warning & Explanation | Selesai |
+
+---
+
+# 10. MASALAH TEKNIS DAN PENYELESAIAN
+
+1. **Penyimpanan Gambar Proyek (Diselesaikan pada P0):**
+   - Gambar tidak lagi disimpan sebagai string Base64 di dalam JSON `editor_state`, melainkan diunggah ke disk melalui `POST /api/v1/assets` dan disimpan pada tabel `uploaded_assets`.
+2. **Garis Putus-Putus pada Hasil Ekspor PNG (Diselesaikan):**
+   - Objek batas area cetak (`isPrintBoundary`) disembunyikan sementara (`visible = false`) selama proses `canvas.toDataURL()` untuk ekspor PNG maupun tekstur 3D preview.
+3. **Kestabilan & Akurasi Rekomendasi Penempatan AI (Diselesaikan pada P2):**
+   - Menggunakan rantai fallback model `gemini-3.8-flash` → `gemini-3.6-flash` → `gemini-3.5-flash-lite`, kompresi gambar sisi klien maks 1024px, zona preset terkalibrasi (`left_chest`, `center_chest`, `full_front`, `upper_back`, `back_center`, `bottom_left`), penerapan otomatis ke kanvas, serta 3 opsi posisi interaktif.
+4. **Normalisasi Tabel Pendukung Database (Diselesaikan pada P3):**
+   - Tabel `design_objects`, `ai_analysis_runs`, `ai_recommendations`, dan `export_files` telah terhubung dengan model Eloquent dan disinkronkan secara otomatis dari alur kerja editor.
+
+---
+
+# 11. PRIORITAS DAN ROADMAP PENGEMBANGAN
+
+## P0 – Stabilitas Inti Sebelum Rilis Operasional (Selesai)
+- Optimasi penyimpanan gambar proyek menggunakan file storage dan tabel `uploaded_assets`.
+- Pengurangan ukuran payload `editor_state`.
+- Validasi dan pengujian alur simpan, buka, perbarui, dan hapus proyek cloud dengan gambar beresolusi tinggi.
+
+## P1 – Penguatan Pengalaman Pengguna (Selesai)
+- Penambahan alur pembuatan proyek baru secara eksplisit (`Proyek Baru`).
+- Kustomisasi penuh properti teks (isi teks, jenis font, ukuran font, ketebalan, dan warna teks) pada panel Properties.
+- Konfigurasi masa berlaku token Sanctum (`SANCTUM_TOKEN_EXPIRATION`).
+
+## P2 – Penyelesaian Fitur AI Multimodal (Selesai)
+- Kestabilan koneksi Gemini API dengan model fallback dan kompresi ukuran gambar sebelum dikirim ke endpoint analisis.
+- Penerapan otomatis hasil rekomendasi penempatan AI ke koordinat canvas serta penyediaan 3 opsi posisi alternatif dan rekomendasi warna kaos interaktif.
+
+## P3 – Pengembangan Lanjutan (Selesai)
+- Pemanfaatan tabel `design_objects`, `export_files`, `ai_analysis_runs`, dan `ai_recommendations`.
+- Render tekstur depan dan belakang secara simultan pada model pakaian 3D sehingga kedua sisi terlihat saat model diputar 360°.
+

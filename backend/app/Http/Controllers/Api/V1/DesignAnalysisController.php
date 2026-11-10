@@ -88,7 +88,11 @@ class DesignAnalysisController extends Controller
             'shirt_type' => ['nullable', 'string', 'max:40'],
             'current_side' => ['nullable', 'string', 'in:front,back'],
             'current_color' => ['nullable', 'string', 'max:32'],
+            'project_id' => ['nullable', 'integer', 'exists:projects,id'],
+            'uploaded_asset_id' => ['nullable', 'integer', 'exists:uploaded_assets,id'],
         ]);
+
+        $startedAtMs = (int) round(microtime(true) * 1000);
 
         $apiKey = trim((string) config('services.gemini.api_key'), " \t\n\r\0\x0B\"'");
         $configuredModel = trim((string) config('services.gemini.model', 'gemini-3.8-flash'));
@@ -363,6 +367,51 @@ PROMPT;
             }
 
             $analysis = $this->normalizeAnalysisPayload($analysis, $aspectRatio, $currentSide);
+            $processingTimeMs = max(1, (int) round(microtime(true) * 1000) - $startedAtMs);
+
+            $runRecordId = null;
+            if (! empty($validated['project_id'])) {
+                try {
+                    $run = \App\Models\AiAnalysisRun::create([
+                        'project_id' => (int) $validated['project_id'],
+                        'uploaded_asset_id' => ! empty($validated['uploaded_asset_id'])
+                            ? (int) $validated['uploaded_asset_id']
+                            : null,
+                        'model_name' => $usedModel,
+                        'prompt_version' => 'v2.0',
+                        'status' => 'completed',
+                        'processing_time_ms' => $processingTimeMs,
+                        'raw_response' => $analysis,
+                    ]);
+                    $runRecordId = $run->id;
+
+                    $confidenceDecimal = isset($analysis['confidence']['score'])
+                        ? round(min(1, max(0, ((float) $analysis['confidence']['score']) / 100)), 5)
+                        : null;
+
+                    $optionsToSave = $analysis['recommendations']['placement_options'] ?? [];
+                    foreach ($optionsToSave as $idx => $opt) {
+                        $run->recommendations()->create([
+                            'position_code' => substr((string) ($opt['position_code'] ?? 'center_chest'), 0, 50),
+                            'scale_category' => substr((string) ($opt['scale_category'] ?? 'medium'), 0, 30),
+                            'reason' => $opt['reason'] ?? null,
+                            'confidence' => $confidenceDecimal,
+                            'coordinates' => [
+                                'side' => $opt['side'] ?? $currentSide,
+                                'area' => $opt['area'] ?? null,
+                                'position_x_percent' => $opt['position_x_percent'] ?? 50,
+                                'position_y_percent' => $opt['position_y_percent'] ?? 32,
+                                'width_percent' => $opt['width_percent'] ?? 50,
+                            ],
+                            'is_selected' => $idx === 0,
+                        ]);
+                    }
+                } catch (\Throwable $persistError) {
+                    Log::warning('Failed to persist AI analysis run history.', [
+                        'message' => $persistError->getMessage(),
+                    ]);
+                }
+            }
 
             return response()->json([
                 'success' => true,
@@ -374,6 +423,8 @@ PROMPT;
                     'image_size_bytes' => $file->getSize(),
                     'image_width' => $imgWidth,
                     'image_height' => $imgHeight,
+                    'processing_time_ms' => $processingTimeMs,
+                    'analysis_run_id' => $runRecordId,
                 ],
             ]);
         } catch (JsonException $exception) {

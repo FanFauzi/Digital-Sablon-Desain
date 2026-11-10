@@ -279,6 +279,31 @@ class AuthAndProjectTest extends TestCase
         $savedSrc = $detail->json('data.editor_state.sides.front.objects.0.src');
         $this->assertSame("/api/v1/assets/{$asset->id}/content", $savedSrc);
         $this->assertStringNotContainsString('data:image/', $savedSrc);
+        $this->assertDatabaseHas('design_objects', [
+            'project_id' => $projectId,
+            'uploaded_asset_id' => $asset->id,
+            'object_type' => 'image',
+            'object_name' => 'legacy.png',
+        ]);
+
+        // Catat metadata hasil ekspor PNG pada proyek tersebut
+        $this->actingAs($user, 'sanctum')
+            ->postJson("/api/v1/projects/{$projectId}/exports", [
+                'file_name' => 'digital-sablon-classic-hoodie-front-300dpi.png',
+                'format' => 'png',
+                'width_cm' => 30,
+                'height_cm' => 40,
+                'dpi' => 300,
+                'pixel_width' => 3543,
+                'pixel_height' => 4724,
+            ])
+            ->assertCreated();
+
+        $this->assertDatabaseHas('export_files', [
+            'project_id' => $projectId,
+            'file_name' => 'digital-sablon-classic-hoodie-front-300dpi.png',
+            'dpi' => 300,
+        ]);
     }
 
     public function test_project_endpoints_require_authentication(): void

@@ -3,7 +3,14 @@ import { Canvas, useLoader } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
 
-function Garment({ color, side, productType, designPreview, designPreviewVersion }) {
+function Garment({
+  color,
+  side,
+  productType,
+  designPreview,
+  designPreviewVersion,
+  sidePreviews,
+}) {
   const geometry = useMemo(() => {
     const shape = new THREE.Shape()
 
@@ -40,6 +47,9 @@ function Garment({ color, side, productType, designPreview, designPreviewVersion
     return result
   }, [])
 
+  const frontSrc = sidePreviews ? sidePreviews.front : (side === 'front' ? designPreview : null)
+  const backSrc = sidePreviews ? sidePreviews.back : (side === 'back' ? designPreview : null)
+
   return (
     <group rotation={[0, side === 'back' ? Math.PI : 0, 0]}>
       <mesh geometry={geometry} castShadow receiveShadow>
@@ -58,12 +68,22 @@ function Garment({ color, side, productType, designPreview, designPreviewVersion
         </mesh>
       )}
 
-      {designPreview && (
+      {frontSrc && (
         <Suspense fallback={null}>
           <ArtworkTexture
-            key={`${side}-${designPreviewVersion}`}
-            src={designPreview}
-            side={side}
+            key={`front-${side === 'front' ? designPreviewVersion : 'cached'}`}
+            src={frontSrc}
+            side="front"
+          />
+        </Suspense>
+      )}
+
+      {backSrc && (
+        <Suspense fallback={null}>
+          <ArtworkTexture
+            key={`back-${side === 'back' ? designPreviewVersion : 'cached'}`}
+            src={backSrc}
+            side="back"
           />
         </Suspense>
       )}
@@ -91,10 +111,9 @@ function ArtworkTexture({ src, side }) {
 
   return (
     <mesh
-      // Saat kaos diputar 180° untuk tampak belakang, bidang tekstur harus
-      // berada di permukaan lokal belakang agar setelah rotasi berada di luar kaos.
+      // Permukaan depan berada pada z = +0.112 dan permukaan belakang pada z = -0.112
+      // sehingga kedua desain depan & belakang terlihat saat model 3D diputar 360°.
       position={[0, -0.02, side === 'back' ? -0.112 : 0.112]}
-      // Kompensasi rotasi model agar artwork tetap tegak dan tidak terbalik.
       rotation={[0, side === 'back' ? Math.PI : 0, 0]}
     >
       <planeGeometry args={[0.59, 0.59 / aspectRatio]} />
@@ -115,6 +134,7 @@ export default function ShirtPreview3D({
   productType = 'tshirt',
   designPreview = null,
   designPreviewVersion = 0,
+  sidePreviews = null,
 }) {
   return (
     <div className="shirt-preview-canvas">
@@ -139,6 +159,7 @@ export default function ShirtPreview3D({
           productType={productType}
           designPreview={designPreview}
           designPreviewVersion={designPreviewVersion}
+          sidePreviews={sidePreviews}
         />
         <OrbitControls
           enablePan={false}
