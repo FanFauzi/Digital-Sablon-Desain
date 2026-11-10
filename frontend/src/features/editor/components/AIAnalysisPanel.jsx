@@ -1,6 +1,28 @@
+import { useState } from 'react'
+
 export default function AIAnalysisPanel({ editor }) {
   const analysis = editor.analysis
   const recommendations = analysis?.recommendations
+  const [placementFeedback, setPlacementFeedback] = useState('')
+
+  const handleApplyPlacement = () => {
+    setPlacementFeedback('')
+    try {
+      editor.applyRecommendedPlacement()
+      setPlacementFeedback('Posisi & skala rekomendasi berhasil diterapkan ke kanvas.')
+    } catch (error) {
+      setPlacementFeedback(error.message || 'Gagal menerapkan rekomendasi penempatan.')
+    }
+  }
+
+  const handleReanalyze = async () => {
+    setPlacementFeedback('')
+    try {
+      await editor.analyzeSelectedImage({ forceRefresh: true })
+    } catch {
+      // Pesan error sudah dikelola oleh state analysisError di useDesignEditor.
+    }
+  }
 
   return (
     <section className="editor-panel ai-analysis-panel">
@@ -83,6 +105,20 @@ export default function AIAnalysisPanel({ editor }) {
                 Y: {recommendations.placement.position_y_percent}% ·
                 Lebar: {recommendations.placement.width_percent}%
               </p>
+              <button
+                type="button"
+                className="project-save-button"
+                style={{ marginTop: '0.5rem', width: '100%' }}
+                onClick={handleApplyPlacement}
+                disabled={editor.isAnalyzing}
+              >
+                Terapkan Penempatan ke Kanvas
+              </button>
+              {placementFeedback && (
+                <p className="ai-metrics" style={{ marginTop: '0.35rem' }}>
+                  {placementFeedback}
+                </p>
+              )}
             </div>
           )}
 
@@ -110,6 +146,17 @@ export default function AIAnalysisPanel({ editor }) {
               Tingkat keyakinan AI: <strong>{analysis.confidence.score}/100</strong>
               <br />{analysis.confidence.explanation}
             </p>
+          )}
+
+          {editor.selectedObject?.type === 'image' && (
+            <button
+              type="button"
+              onClick={handleReanalyze}
+              disabled={editor.isAnalyzing}
+              style={{ width: '100%' }}
+            >
+              Analisis Ulang Gambar Ini
+            </button>
           )}
         </div>
       )}

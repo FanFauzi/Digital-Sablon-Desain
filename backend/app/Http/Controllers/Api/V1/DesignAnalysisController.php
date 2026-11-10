@@ -22,7 +22,10 @@ class DesignAnalysisController extends Controller
         ]);
 
         $apiKey = config('services.gemini.api_key');
-        $model = config('services.gemini.model', 'gemini-3.8-flash');
+        $configuredModel = trim((string) config('services.gemini.model', 'gemini-2.5-flash'));
+        if (in_array($configuredModel, ['', 'gemini-3.8-flash', 'gemini-3.6-flash'], true)) {
+            $configuredModel = 'gemini-2.5-flash';
+        }
 
         if (!$apiKey) {
             return response()->json([
@@ -94,9 +97,12 @@ PROMPT;
                 ],
             ];
 
-            // Coba model utama terlebih dahulu. Jika 3.8 mengalami overload,
-            // alihkan ke 3.6 Flash yang juga mendukung tugas multimodal.
-            $modelsToTry = array_values(array_unique([$model, 'gemini-3.6-flash']));
+            // Coba model utama terlebih dahulu, lalu fallback ke model multimodal stabil.
+            $modelsToTry = array_values(array_unique([
+                $configuredModel,
+                'gemini-2.5-flash',
+                'gemini-2.0-flash',
+            ]));
             $retryableStatuses = [429, 500, 502, 503, 504];
             $response = null;
             $usedModel = null;
@@ -110,7 +116,7 @@ PROMPT;
                         $attemptResponse = Http::acceptJson()
                             ->withHeaders(['x-goog-api-key' => $apiKey])
                             ->connectTimeout(10)
-                            ->timeout(20)
+                            ->timeout(25)
                             ->post(
                                 "https://generativelanguage.googleapis.com/v1beta/models/{$candidateModel}:generateContent",
                                 $payload
@@ -148,8 +154,12 @@ PROMPT;
                         'body' => $response->json('error.message'),
                     ]);
 
-                    // Jangan pindah model untuk kesalahan autentikasi, model tidak ditemukan,
-                    // atau payload tidak valid. 429 juga lebih tepat ditangani sebagai limit akun.
+                    // Jika nama model tidak ditemukan (404), lanjutkan ke model cadangan berikutnya.
+                    if ($status === 404) {
+                        break;
+                    }
+
+                    // Jangan pindah model untuk kesalahan autentikasi atau payload tidak valid.
                     if (!in_array($status, $retryableStatuses, true) || $status === 429) {
                         break 2;
                     }
@@ -210,7 +220,8 @@ PROMPT;
                 ], 502);
             }
 
-            $analysis = json_decode($text, true, 512, JSON_THROW_ON_ERROR);
+            $cleanedText = preg_replace('/^```(?:json)?\s*|\s*```$/i', '', trim($text));
+            $analysis = json_decode($cleanedText ?: $text, true, 512, JSON_THROW_ON_ERROR);
 
             if (!is_array($analysis) || !isset($analysis['summary'], $analysis['recommendations'])) {
                 return response()->json([

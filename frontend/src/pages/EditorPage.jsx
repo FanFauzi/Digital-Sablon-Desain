@@ -255,6 +255,31 @@ export default function EditorPage() {
     }
   }
 
+  const handleNewProject = async () => {
+    if (!shirt || projectBusy || isSwitchingSide) return
+
+    setProjectBusy(true)
+    setProjectMessage('')
+
+    try {
+      const frontPrintArea = shirt.print_areas?.find(
+        (area) => area.view_side === 'front'
+      )
+      await resetSideDesigns(frontPrintArea)
+      setSelectedSide('front')
+      setActiveProjectId(null)
+      setProjectName('Desain Saya')
+      setProjectMessage('Area kerja direset untuk proyek baru.')
+      setProjectMessageType('success')
+    } catch (error) {
+      console.error(error)
+      setProjectMessage(error.message || 'Gagal membuat proyek baru.')
+      setProjectMessageType('error')
+    } finally {
+      setProjectBusy(false)
+    }
+  }
+
   const handleSideChange = async (nextSide) => {
     if (
       !shirt ||
@@ -479,6 +504,13 @@ export default function EditorPage() {
                 disabled={projectBusy || isSwitchingSide}
               >
                 {projectBusy ? 'Memproses...' : activeProjectId ? 'Simpan Perubahan' : 'Simpan Proyek'}
+              </button>
+              <button
+                type="button"
+                onClick={handleNewProject}
+                disabled={projectBusy || isSwitchingSide}
+              >
+                Proyek Baru
               </button>
             </div>
           </div>

@@ -971,13 +971,24 @@ export default function useDesignEditor(canvasElement) {
   const [analysis, setAnalysis] = useState(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analysisError, setAnalysisError] = useState('')
+  const analysisCacheRef = useRef(new Map())
 
-  const analyzeSelectedImage = useCallback(async () => {
+  const analyzeSelectedImage = useCallback(async (options = {}) => {
     const canvas = canvasRef.current
     const active = canvas?.getActiveObject()
 
     if (!active || active.type !== 'image' || typeof active.getElement !== 'function') {
       throw new Error('Pilih objek gambar terlebih dahulu untuk dianalisis.')
+    }
+
+    const { forceRefresh = false } = options
+    const cacheKey = active.editorId || null
+
+    if (!forceRefresh && cacheKey && analysisCacheRef.current.has(cacheKey)) {
+      const cachedResult = analysisCacheRef.current.get(cacheKey)
+      setAnalysisError('')
+      setAnalysis(cachedResult)
+      return cachedResult
     }
 
     setIsAnalyzing(true)
@@ -986,16 +997,33 @@ export default function useDesignEditor(canvasElement) {
 
     try {
       const source = active.getElement()
-      const imageCanvas = document.createElement('canvas')
-      imageCanvas.width = source.naturalWidth || source.width
-      imageCanvas.height = source.naturalHeight || source.height
+      const rawWidth = source.naturalWidth || source.width
+      const rawHeight = source.naturalHeight || source.height
 
-      if (!imageCanvas.width || !imageCanvas.height) {
+      if (!rawWidth || !rawHeight) {
         throw new Error('Gambar tidak dapat dibaca oleh browser.')
       }
 
+      // Batasi dimensi gambar analisis maksimal 1024px agar tidak memicu HTTP 413 atau timeout.
+      const maxAnalysisDimension = 1024
+      const scale = Math.min(
+        maxAnalysisDimension / rawWidth,
+        maxAnalysisDimension / rawHeight,
+        1
+      )
+      const targetWidth = Math.max(1, Math.round(rawWidth * scale))
+      const targetHeight = Math.max(1, Math.round(rawHeight * scale))
+
+      const imageCanvas = document.createElement('canvas')
+      imageCanvas.width = targetWidth
+      imageCanvas.height = targetHeight
+
       const context = imageCanvas.getContext('2d')
-      context.drawImage(source, 0, 0, imageCanvas.width, imageCanvas.height)
+      if (!context) {
+        throw new Error('Browser tidak dapat menyiapkan gambar untuk analisis.')
+      }
+
+      context.drawImage(source, 0, 0, targetWidth, targetHeight)
 
       const blob = await new Promise((resolve) => imageCanvas.toBlob(resolve, 'image/png'))
 
@@ -1007,8 +1035,14 @@ export default function useDesignEditor(canvasElement) {
       formData.append('image', blob, 'design-analysis.png')
 
       const response = await api.post('/designs/analyze', formData)
-      setAnalysis(response.data.data)
-      return response.data.data
+      const result = response.data.data
+
+      if (cacheKey && result) {
+        analysisCacheRef.current.set(cacheKey, result)
+      }
+
+      setAnalysis(result)
+      return result
     } catch (error) {
       const message = error.response?.data?.message || error.message || 'Analisis AI gagal.'
       setAnalysisError(message)
@@ -1017,6 +1051,80 @@ export default function useDesignEditor(canvasElement) {
       setIsAnalyzing(false)
     }
   }, [])
+
+  const applyRecommendedPlacement = useCallback((customPlacement = null) => {
+    const canvas = canvasRef.current
+    if (!canvas) {
+      throw new Error('Kanvas desain belum siap.')
+    }
+
+    const placement = customPlacement || analysis?.recommendations?.placement
+    if (!placement) {
+      throw new Error('Belum ada rekomendasi penempatan AI yang tersedia.')
+    }
+
+    const active = canvas.getActiveObject()
+    const targetImage =
+      active && String(active.type || '').toLowerCase() === 'image'
+        ? active
+        : canvas
+            .getObjects()
+            .find((item) => !item.isPrintBoundary && String(item.type || '').toLowerCase() === 'image')
+
+    if (!targetImage || !targetImage.width || !targetImage.height) {
+      throw new Error('Pilih objek gambar pada kanvas untuk menerapkan rekomendasi.')
+    }
+
+    const printArea = printAreaRef.current
+    const widthPercent = Math.min(92, Math.max(12, Number(placement.width_percent) || 38))
+    const posXPercent = Math.min(88, Math.max(12, Number(placement.position_x_percent) || 50))
+    const posYPercent = Math.min(88, Math.max(12, Number(placement.position_y_percent) || 45))
+
+    const desiredWidth = (widthPercent / 100) * printArea.width
+    const maxAllowedHeight = printArea.height * 0.92
+    const scaleByWidth = desiredWidth / targetImage.width
+    const scaleByHeight = maxAllowedHeight / targetImage.height
+    const nextScale = Math.min(scaleByWidth, scaleByHeight)
+
+    const scaledWidth = targetImage.width * nextScale
+    const scaledHeight = targetImage.height * nextScale
+
+    const rawCenterX = printArea.left + (posXPercent / 100) * printArea.width
+    const rawCenterY = printArea.top + (posYPercent / 100) * printArea.height
+
+    const minCenterX = printArea.left + scaledWidth / 2
+    const maxCenterX = printArea.left + printArea.width - scaledWidth / 2
+    const minCenterY = printArea.top + scaledHeight / 2
+    const maxCenterY = printArea.top + printArea.height - scaledHeight / 2
+
+    const clampedCenterX =
+      minCenterX <= maxCenterX
+        ? Math.min(maxCenterX, Math.max(minCenterX, rawCenterX))
+        : printArea.left + printArea.width / 2
+
+    const clampedCenterY =
+      minCenterY <= maxCenterY
+        ? Math.min(maxCenterY, Math.max(minCenterY, rawCenterY))
+        : printArea.top + printArea.height / 2
+
+    targetImage.set({
+      originX: 'center',
+      originY: 'center',
+      left: clampedCenterX,
+      top: clampedCenterY,
+      scaleX: nextScale,
+      scaleY: nextScale,
+      angle: 0,
+    })
+
+    targetImage.setCoords()
+    canvas.setActiveObject(targetImage)
+    canvas.requestRenderAll()
+
+    syncSelectedObject(targetImage)
+    refreshLayers()
+    refreshDesignPreview()
+  }, [analysis, refreshDesignPreview, refreshLayers, syncSelectedObject])
 
   const exportDesign = useCallback(async (options = {}) => {
     const canvas = canvasRef.current
@@ -1190,6 +1298,7 @@ return {
   isAnalyzing,
   analysisError,
   analyzeSelectedImage,
+  applyRecommendedPlacement,
   uploadImage,
   addText,
   deleteSelected,
