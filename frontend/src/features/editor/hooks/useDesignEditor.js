@@ -265,10 +265,15 @@ export default function useDesignEditor(canvasElement) {
 
     const { left, top, width, height } = printAreaRef.current
     const previousBackground = canvas.backgroundColor
+    const printBoundaries = canvas.getObjects().filter((object) => object.isPrintBoundary)
 
     try {
-      // Preview transparan hanya berisi desain di area cetak.
+      // Preview transparan hanya berisi desain di area cetak tanpa garis putus-putus batas cetak.
       canvas.backgroundColor = ''
+      printBoundaries.forEach((boundary) => {
+        boundary.visible = false
+      })
+
       const preview = canvas.toDataURL({
         format: 'png',
         left,
@@ -281,6 +286,9 @@ export default function useDesignEditor(canvasElement) {
       setDesignPreview(preview)
       setDesignPreviewVersion((version) => version + 1)
     } finally {
+      printBoundaries.forEach((boundary) => {
+        boundary.visible = true
+      })
       canvas.backgroundColor = previousBackground
       canvas.requestRenderAll()
     }
@@ -1065,9 +1073,13 @@ export default function useDesignEditor(canvasElement) {
     })
 
     const previousBackground = canvas.backgroundColor
+    const printBoundaries = canvas.getObjects().filter((object) => object.isPrintBoundary)
 
     try {
       canvas.backgroundColor = ''
+      printBoundaries.forEach((boundary) => {
+        boundary.visible = false
+      })
       canvas.requestRenderAll()
 
       // Gunakan skala seragam berdasarkan lebar fisik; area cetak telah
@@ -1132,6 +1144,9 @@ export default function useDesignEditor(canvasElement) {
         warningCount: clippingWarnings.length,
       }
     } finally {
+      printBoundaries.forEach((boundary) => {
+        boundary.visible = true
+      })
       canvas.backgroundColor = previousBackground
       canvas.requestRenderAll()
     }
