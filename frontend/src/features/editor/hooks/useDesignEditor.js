@@ -179,7 +179,7 @@ function fitPrintAreaToPhysicalRatio(physicalWidthCm, physicalHeightCm) {
   }
 }
 
-async function imageElementToDataUrl(element) {
+async function imageElementToBlob(element) {
   const width = element.naturalWidth || element.width
   const height = element.naturalHeight || element.height
 
@@ -197,8 +197,19 @@ async function imageElementToDataUrl(element) {
   }
 
   context.drawImage(element, 0, 0, width, height)
-  return temporaryCanvas.toDataURL('image/png')
+
+  const blob = await new Promise((resolve) => {
+    temporaryCanvas.toBlob(resolve, 'image/png')
+  })
+
+  if (!blob) {
+    throw new Error('Gagal menyiapkan file gambar proyek.')
+  }
+
+  return blob
 }
+
+const MAX_UPLOAD_SIZE_BYTES = 15 * 1024 * 1024
 
 export default function useDesignEditor(canvasElement) {
   const canvasRef = useRef(null)
@@ -206,6 +217,7 @@ export default function useDesignEditor(canvasElement) {
   const activeSideRef = useRef('front')
   const sideSnapshotsRef = useRef({ front: null, back: null })
   const isSwitchingSideRef = useRef(false)
+  const imageAssetsRef = useRef(new Map())
 
   const [selectedObject, setSelectedObject] = useState(null)
   const [layers, setLayers] = useState([])
