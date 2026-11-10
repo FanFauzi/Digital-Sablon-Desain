@@ -1,4 +1,4 @@
-import { Suspense } from 'react'
+import { Suspense, useRef } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { ContactShadows } from '@react-three/drei'
 import ShirtModel from './ShirtModel'
@@ -29,13 +29,29 @@ export default function ShirtScene({
     cameraView,
     cameraZoom,
     cameraResetTrigger,
+    autoRotate,
     background,
     materialEffects,
     motion,
     setCameraView,
     setCameraZoom,
     triggerCameraReset,
+    toggleAutoRotate,
   } = useConfiguratorStore()
+
+  const r3fContextRef = useRef({
+    gl: null,
+    scene: null,
+    camera: null,
+    garmentGroup: null,
+  })
+
+  const notifySceneReady = (patch) => {
+    r3fContextRef.current = { ...r3fContextRef.current, ...patch }
+    if (onSceneReady) {
+      onSceneReady(r3fContextRef.current)
+    }
+  }
 
   const handleViewClick = (viewId) => {
     setCameraView(viewId)
@@ -48,13 +64,7 @@ export default function ShirtScene({
   }
 
   const containerStyle = background.transparent
-    ? {
-        backgroundImage:
-          'linear-gradient(45deg, #d4d4d8 25%, transparent 25%), linear-gradient(-45deg, #d4d4d8 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #d4d4d8 75%), linear-gradient(-45deg, transparent 75%, #d4d4d8 75%)',
-        backgroundSize: '20px 20px',
-        backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px',
-        backgroundColor: '#f4f4f5',
-      }
+    ? undefined
     : background.customImageUrl
       ? {
           backgroundImage: `url(${background.customImageUrl})`,
@@ -66,26 +76,29 @@ export default function ShirtScene({
         }
 
   return (
-    <div className="configurator-3d-stage" style={containerStyle}>
-      <div className="configurator-camera-pills">
-        {CAMERA_VIEWS.map((view) => (
-          <button
-            key={view.id}
-            type="button"
-            className={`camera-pill-btn ${cameraView === view.id ? 'active' : ''}`}
-            onClick={() => handleViewClick(view.id)}
-          >
-            {view.label}
-          </button>
-        ))}
-        <button
-          type="button"
-          className="camera-pill-btn reset"
-          onClick={triggerCameraReset}
-          title="Reset posisi kamera ke tampilan awal"
-        >
-          ↺ Reset Kamera
-        </button>
+    <div
+      className={`shirt-3d-stage ${background.transparent ? 'checkerboard-bg' : ''}`}
+      style={containerStyle}
+    >
+      {/* Top HUD Badges */}
+      <div className="shirt-3d-hud-top">
+        <span className="shirt-3d-badge">
+          MODEL: {garmentStyle.toUpperCase()}
+        </span>
+        <span className="shirt-3d-badge">
+          FABRIC: {(materialEffects?.fabricType || 'cotton_combed').replace('_', ' ').toUpperCase()}
+        </span>
+        {materialEffects?.acidWash?.enabled && (
+          <span className="shirt-3d-badge accent">ACID WASH</span>
+        )}
+        {materialEffects?.puffPrint?.enabled && (
+          <span className="shirt-3d-badge accent">PUFF PRINT 3D</span>
+        )}
+        {motion?.mode && motion.mode !== 'static' && (
+          <span className="shirt-3d-badge accent">
+            MOTION: {motion.mode.toUpperCase()} ({motion.speed}x)
+          </span>
+        )}
       </div>
 
       <Canvas
@@ -93,10 +106,11 @@ export default function ShirtScene({
         dpr={[1, 2]}
         gl={{ preserveDrawingBuffer: true, alpha: true, antialias: true }}
         camera={{ position: [0, 0.08, 3.45], fov: 36 }}
-        onCreated={({ gl }) => {
+        onCreated={({ gl, scene, camera }) => {
           if (onWebglCanvasReady) {
             onWebglCanvasReady(gl.domElement)
           }
+          notifySceneReady({ gl, scene, camera })
         }}
       >
         <Lighting lighting={materialEffects?.lighting} />
@@ -112,7 +126,7 @@ export default function ShirtScene({
             sidePreviews={sidePreviews}
             materialEffects={materialEffects}
             motion={motion}
-            onSceneReady={onSceneReady}
+            onSceneReady={(garmentGroup) => notifySceneReady({ garmentGroup })}
           />
           {materialEffects?.lighting?.shadows !== false && (
             <ContactShadows
@@ -129,40 +143,56 @@ export default function ShirtScene({
           cameraView={cameraView}
           cameraZoom={cameraZoom}
           cameraResetTrigger={cameraResetTrigger}
-          autoRotate={motion?.cameraAutoRotate}
+          autoRotate={Boolean(autoRotate || motion?.cameraAutoRotate)}
         />
       </Canvas>
 
-      <div className="configurator-stage-footer">
-        <div className="zoom-control-bar">
-          <span>Zoom</span>
+      {/* Bottom Camera & Zoom Bar */}
+      <div className="shirt-3d-camera-bar">
+        <div className="camera-view-pills">
+          {CAMERA_VIEWS.map((view) => (
+            <button
+              key={view.id}
+              type="button"
+              className={cameraView === view.id ? 'active' : ''}
+              onClick={() => handleViewClick(view.id)}
+            >
+              {view.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="camera-zoom-controls">
           <button
             type="button"
             onClick={() => setCameraZoom(cameraZoom - 0.15)}
-            aria-label="Perkecil tampilan 3D"
+            title="Zoom Out"
           >
             −
           </button>
-          <input
-            type="range"
-            min="0.6"
-            max="1.8"
-            step="0.05"
-            value={cameraZoom}
-            onChange={(e) => setCameraZoom(Number(e.target.value))}
-          />
+          <button
+            type="button"
+            onClick={triggerCameraReset}
+            title="Reset Kamera"
+          >
+            {Math.round(cameraZoom * 100)}%
+          </button>
           <button
             type="button"
             onClick={() => setCameraZoom(cameraZoom + 0.15)}
-            aria-label="Perbesar tampilan 3D"
+            title="Zoom In"
           >
             +
           </button>
-          <small>{Math.round(cameraZoom * 100)}%</small>
+          <button
+            type="button"
+            className={autoRotate ? 'active' : ''}
+            onClick={toggleAutoRotate}
+            title="Putar Otomatis 360°"
+          >
+            ↻ 360°
+          </button>
         </div>
-        <span className="preview-drag-hint">
-          Drag 360° · Scroll untuk Zoom · Klik kanan untuk Pan
-        </span>
       </div>
     </div>
   )

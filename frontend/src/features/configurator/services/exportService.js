@@ -22,16 +22,26 @@ function triggerBlobDownload(blob, fileName) {
  * Ekspor gambar Mockup 3D (PNG atau JPG) dari elemen canvas Three.js pada resolusi target.
  */
 export async function export3DMockupImage({
+  gl,
   webglCanvas,
+  scene,
+  camera,
   format = 'png',
   resolution = '1024x1024',
   backgroundColor = '#E9E9E5',
   transparent = false,
+  transparentBg = false,
   quality = 0.95,
   shirtName = 'tshirt',
+  fileNamePrefix = '',
 }) {
-  if (!webglCanvas) {
+  const sourceCanvas = webglCanvas || gl?.domElement
+  if (!sourceCanvas) {
     throw new Error('Kanvas 3D belum siap untuk diekspor.')
+  }
+
+  if (gl && scene && camera) {
+    gl.render(scene, camera)
   }
 
   const { width, height } = parseResolution(resolution)
@@ -45,23 +55,27 @@ export async function export3DMockupImage({
   }
 
   const isJpg = format === 'jpg' || format === 'jpeg'
-  if (isJpg || !transparent) {
-    ctx.fillStyle = backgroundColor && backgroundColor !== 'transparent' ? backgroundColor : '#E9E9E5'
+  const useTransparent = Boolean(transparent || transparentBg)
+
+  if (isJpg || !useTransparent) {
+    ctx.fillStyle =
+      backgroundColor && backgroundColor !== 'transparent'
+        ? backgroundColor
+        : '#E9E9E5'
     ctx.fillRect(0, 0, width, height)
   } else {
     ctx.clearRect(0, 0, width, height)
   }
 
-  // Fit WebGL canvas aspect ratio ke dalam frame target secara proporsional (center cover/contain)
-  const srcW = webglCanvas.width || 1024
-  const srcH = webglCanvas.height || 1024
+  const srcW = sourceCanvas.width || 1024
+  const srcH = sourceCanvas.height || 1024
   const scale = Math.min(width / srcW, height / srcH)
   const drawW = Math.round(srcW * scale)
   const drawH = Math.round(srcH * scale)
   const offsetX = Math.round((width - drawW) / 2)
   const offsetY = Math.round((height - drawH) / 2)
 
-  ctx.drawImage(webglCanvas, offsetX, offsetY, drawW, drawH)
+  ctx.drawImage(sourceCanvas, offsetX, offsetY, drawW, drawH)
 
   const mimeType = isJpg ? 'image/jpeg' : 'image/png'
   const ext = isJpg ? 'jpg' : 'png'
@@ -74,12 +88,12 @@ export async function export3DMockupImage({
     )
   })
 
-  const safeName = String(shirtName || 'garment')
+  const safeName = String(fileNamePrefix || shirtName || 'garment')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
 
-  const fileName = `digital-sablon-3d-mockup-${safeName}-${width}x${height}-${Date.now()}.${ext}`
+  const fileName = `${safeName}-${width}x${height}-${Date.now()}.${ext}`
   triggerBlobDownload(blob, fileName)
 
   return {
@@ -93,15 +107,21 @@ export async function export3DMockupImage({
 /**
  * Ekspor model 3D pakaian beserta warna & tekstur desain ke dalam file binary .glb.
  */
-export async function export3DModelGLB({ sceneObject, shirtName = 'tshirt' }) {
-  if (!sceneObject) {
+export async function export3DModelGLB({
+  targetObject,
+  sceneObject,
+  shirtName = 'tshirt',
+  fileNamePrefix = '',
+}) {
+  const objectToExport = targetObject || sceneObject
+  if (!objectToExport) {
     throw new Error('Objek 3D belum siap untuk diekspor ke GLB.')
   }
 
   const exporter = new GLTFExporter()
   const arrayBuffer = await new Promise((resolve, reject) => {
     exporter.parse(
-      sceneObject,
+      objectToExport,
       (result) => resolve(result),
       (error) => reject(error || new Error('Gagal mengekspor model GLB.')),
       { binary: true }
@@ -109,12 +129,12 @@ export async function export3DModelGLB({ sceneObject, shirtName = 'tshirt' }) {
   })
 
   const blob = new Blob([arrayBuffer], { type: 'model/gltf-binary' })
-  const safeName = String(shirtName || 'garment')
+  const safeName = String(fileNamePrefix || shirtName || 'garment')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
 
-  const fileName = `digital-sablon-3d-${safeName}-${Date.now()}.glb`
+  const fileName = `${safeName}-${Date.now()}.glb`
   triggerBlobDownload(blob, fileName)
 
   return { fileName, format: 'glb' }
@@ -123,16 +143,20 @@ export async function export3DModelGLB({ sceneObject, shirtName = 'tshirt' }) {
 /**
  * Rekam video animasi 3D selama beberapa detik dari kanvas WebGL.
  */
-export async function export3DVideoAnimation({
+export async function export3DVideoWebM({
+  gl,
   webglCanvas,
   durationMs = 4000,
+  fps = 30,
   shirtName = 'tshirt',
+  fileNamePrefix = '',
 }) {
-  if (!webglCanvas || typeof webglCanvas.captureStream !== 'function') {
+  const sourceCanvas = webglCanvas || gl?.domElement
+  if (!sourceCanvas || typeof sourceCanvas.captureStream !== 'function') {
     throw new Error('Browser ini tidak mendukung perekaman video dari kanvas 3D.')
   }
 
-  const stream = webglCanvas.captureStream(30)
+  const stream = sourceCanvas.captureStream(fps)
   const mimeCandidates = [
     'video/mp4',
     'video/webm;codecs=vp9',
@@ -140,8 +164,10 @@ export async function export3DVideoAnimation({
     'video/webm',
   ]
   const supportedMime =
-    mimeCandidates.find((type) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(type)) ||
-    'video/webm'
+    mimeCandidates.find(
+      (type) =>
+        typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(type)
+    ) || 'video/webm'
 
   const recorder = new MediaRecorder(stream, { mimeType: supportedMime })
   const chunks = []
@@ -166,13 +192,15 @@ export async function export3DVideoAnimation({
 
   const videoBlob = await recordingPromise
   const ext = supportedMime.includes('mp4') ? 'mp4' : 'webm'
-  const safeName = String(shirtName || 'garment')
+  const safeName = String(fileNamePrefix || shirtName || 'garment')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
 
-  const fileName = `digital-sablon-3d-animation-${safeName}-${Date.now()}.${ext}`
+  const fileName = `${safeName}-animation-${Date.now()}.${ext}`
   triggerBlobDownload(videoBlob, fileName)
 
   return { fileName, format: ext }
 }
+
+export const export3DVideoAnimation = export3DVideoWebM
