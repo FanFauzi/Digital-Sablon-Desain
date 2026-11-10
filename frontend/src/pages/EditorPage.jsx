@@ -578,17 +578,14 @@ export default function EditorPage() {
           >
             <div className="studio-pane-header">
               <div>
-                <span className="eyebrow">2D PRINT AREA EDITOR</span>
+                <span className="eyebrow">2D PRINT AREA EDITOR · FULL 3D SURFACE</span>
                 <h2>
-                  Area Cetak: {SIDE_LABELS[selectedSide] || selectedSide.toUpperCase()}
+                  Permukaan 3D: {SIDE_LABELS[selectedSide] || selectedSide.toUpperCase()}
                 </h2>
               </div>
-              {printArea && (
-                <span className="studio-print-spec">
-                  {printArea.physical_width_cm} × {printArea.physical_height_cm} cm ·{' '}
-                  {printArea.dpi || 300} DPI
-                </span>
-              )}
+              <span className="studio-print-spec">
+                Seluruh Permukaan 3D · {printArea?.dpi || 300} DPI
+              </span>
             </div>
 
             <div className="canvas-viewport" ref={viewportRef}>
@@ -596,8 +593,7 @@ export default function EditorPage() {
             </div>
 
             <div className="canvas-info">
-              Kanvas {EDITOR_CONFIG.width} × {EDITOR_CONFIG.height} px · Perubahan pada
-              kanvas langsung diterapkan ke tekstur 3D secara real-time.
+              Garis ungu menunjukkan kontur siluet penuh model 3D · Anda bebas menempatkan gambar di seluruh permukaan pakaian (termasuk bahu, lengan, hingga tepi bawah kaos).
             </div>
           </div>
         </section>

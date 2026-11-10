@@ -3,10 +3,15 @@ import {
   Canvas,
   FabricImage,
   IText,
+  Polygon,
   Rect,
 } from 'fabric'
 
 import { EDITOR_CONFIG } from '../utils/editorConfig'
+import {
+  PRINT_PLACEMENT_PRESETS,
+  useConfiguratorStore,
+} from '../../configurator/store/configuratorStore'
 import api from '../../../services/api'
 import {
   buildAssetContentPath,
@@ -24,8 +29,45 @@ const SERIALIZED_OBJECT_PROPS = [
   'assetUrl',
 ]
 
-function createPrintBoundary(printArea = EDITOR_CONFIG.printArea) {
-  const boundary = new Rect({
+const DEFAULT_TSHIRT_SILHOUETTE = [
+  { u: 0.36, v: 0.02 },
+  { u: 0.50, v: 0.05 },
+  { u: 0.64, v: 0.02 },
+  { u: 0.82, v: 0.08 },
+  { u: 0.98, v: 0.24 },
+  { u: 0.88, v: 0.44 },
+  { u: 0.74, v: 0.36 },
+  { u: 0.74, v: 0.97 },
+  { u: 0.26, v: 0.97 },
+  { u: 0.26, v: 0.36 },
+  { u: 0.12, v: 0.44 },
+  { u: 0.02, v: 0.24 },
+  { u: 0.18, v: 0.08 },
+]
+
+const DEFAULT_SLEEVE_SILHOUETTE = [
+  { u: 0.18, v: 0.04 },
+  { u: 0.82, v: 0.04 },
+  { u: 0.94, v: 0.94 },
+  { u: 0.06, v: 0.94 },
+]
+
+function syncPrintBoundaryGuides(
+  canvas,
+  printArea = EDITOR_CONFIG.printArea,
+  side = 'front'
+) {
+  if (!canvas) return
+
+  const existingGuides = canvas
+    .getObjects()
+    .filter((object) => object.isPrintBoundary)
+  existingGuides.forEach((guide) => canvas.remove(guide))
+
+  const guides = []
+
+  // 1. Bingkai penuh seluruh permukaan 3D model (Full Surface Boundary)
+  const outerFrame = new Rect({
     left: printArea.left,
     top: printArea.top,
     width: printArea.width,
@@ -33,16 +75,72 @@ function createPrintBoundary(printArea = EDITOR_CONFIG.printArea) {
     originX: 'left',
     originY: 'top',
     fill: 'rgba(0, 0, 0, 0)',
-    stroke: '#a3a3a3',
-    strokeWidth: 3,
-    strokeDashArray: [12, 8],
+    stroke: '#cbd5e1',
+    strokeWidth: 2,
+    strokeDashArray: [8, 6],
     selectable: false,
     evented: false,
     excludeFromExport: true,
   })
+  outerFrame.isPrintBoundary = true
+  guides.push(outerFrame)
 
-  boundary.isPrintBoundary = true
-  return boundary
+  // 2. Kontur siluet 2D pakaian asli dari model 3D agar pengguna bisa menempatkan gambar di seluruh permukaan
+  const storeSilhouettes =
+    useConfiguratorStore.getState().surfaceMapping?.silhouettes || {}
+  const rawSilhouette =
+    storeSilhouettes[side] && storeSilhouettes[side].length >= 6
+      ? storeSilhouettes[side]
+      : side === 'left_sleeve' || side === 'right_sleeve'
+        ? DEFAULT_SLEEVE_SILHOUETTE
+        : DEFAULT_TSHIRT_SILHOUETTE
+
+  const polygonPoints = rawSilhouette.map((pt) => ({
+    x: printArea.left + pt.u * printArea.width,
+    y: printArea.top + pt.v * printArea.height,
+  }))
+
+  const silhouettePolygon = new Polygon(polygonPoints, {
+    fill: 'rgba(241, 245, 249, 0.45)',
+    stroke: '#64748b',
+    strokeWidth: 2.5,
+    strokeDashArray: [10, 6],
+    selectable: false,
+    evented: false,
+    excludeFromExport: true,
+    objectCaching: false,
+  })
+  silhouettePolygon.isPrintBoundary = true
+  guides.push(silhouettePolygon)
+
+  // 3. Panduan bantu area tengah dada/punggung (opsional visual, tidak membatasi gerak objek)
+  if (side === 'front' || side === 'back') {
+    const chestGuide = new Rect({
+      left: printArea.left + printArea.width * 0.27,
+      top: printArea.top + printArea.height * 0.16,
+      width: printArea.width * 0.46,
+      height: printArea.height * 0.72,
+      originX: 'left',
+      originY: 'top',
+      fill: 'rgba(0, 0, 0, 0)',
+      stroke: '#94a3b8',
+      strokeWidth: 1.5,
+      strokeDashArray: [6, 6],
+      selectable: false,
+      evented: false,
+      excludeFromExport: true,
+    })
+    chestGuide.isPrintBoundary = true
+    guides.push(chestGuide)
+  }
+
+  guides.forEach((guide) => {
+    canvas.add(guide)
+  })
+  // Urutkan agar seluruh panduan berada di lapisan paling belakang
+  for (let i = guides.length - 1; i >= 0; i--) {
+    canvas.sendObjectToBack(guides[i])
+  }
 }
 
 
@@ -148,16 +246,29 @@ async function addPngDpiMetadata(blob, dpi) {
   return new Blob([PNG_SIGNATURE, ...chunks], { type: 'image/png' })
 }
 
-function fitPrintAreaToPhysicalRatio(physicalWidthCm, physicalHeightCm) {
+function fitPrintAreaToPhysicalRatio(
+  physicalWidthCm,
+  physicalHeightCm,
+  side = 'front'
+) {
   const base = EDITOR_CONFIG.printArea
+  const storeRatios =
+    useConfiguratorStore.getState().surfaceMapping?.aspectRatios || {}
+  const modelRatio = Number(storeRatios[side])
+
   const widthCm = Number(physicalWidthCm)
   const heightCm = Number(physicalHeightCm)
 
-  if (!Number.isFinite(widthCm) || !Number.isFinite(heightCm) || widthCm <= 0 || heightCm <= 0) {
-    return { ...base }
-  }
+  const targetRatio =
+    Number.isFinite(modelRatio) && modelRatio > 0.25 && modelRatio < 2.5
+      ? modelRatio
+      : Number.isFinite(widthCm) &&
+          Number.isFinite(heightCm) &&
+          widthCm > 0 &&
+          heightCm > 0
+        ? widthCm / heightCm
+        : base.width / base.height
 
-  const targetRatio = widthCm / heightCm
   const maxRatio = base.width / base.height
 
   let width
@@ -172,10 +283,10 @@ function fitPrintAreaToPhysicalRatio(physicalWidthCm, physicalHeightCm) {
   }
 
   return {
-    left: base.left + (base.width - width) / 2,
-    top: base.top + (base.height - height) / 2,
-    width,
-    height,
+    left: Math.round(base.left + (base.width - width) / 2),
+    top: Math.round(base.top + (base.height - height) / 2),
+    width: Math.round(width),
+    height: Math.round(height),
   }
 }
 
@@ -214,7 +325,9 @@ const MAX_UPLOAD_SIZE_BYTES = 15 * 1024 * 1024
 export default function useDesignEditor(canvasElement) {
   const canvasRef = useRef(null)
   const printAreaRef = useRef({ ...EDITOR_CONFIG.printArea })
+  const printAreaSpecRef = useRef(null)
   const activeSideRef = useRef('front')
+  const surfaceMapping = useConfiguratorStore((s) => s.surfaceMapping)
   const sideSnapshotsRef = useRef({
     front: null,
     back: null,
@@ -307,7 +420,7 @@ export default function useDesignEditor(canvasElement) {
         return
       }
 
-      // Preview transparan hanya berisi desain di area cetak tanpa garis putus-putus batas cetak.
+      // Preview transparan hanya berisi desain di area cetak tanpa garis panduan siluet.
       canvas.backgroundColor = ''
       printBoundaries.forEach((boundary) => {
         boundary.visible = false
@@ -370,10 +483,11 @@ export default function useDesignEditor(canvasElement) {
 
     canvasRef.current = canvas
 
-    const boundary = createPrintBoundary(printAreaRef.current)
-
-    canvas.add(boundary)
-    canvas.sendObjectToBack(boundary)
+    syncPrintBoundaryGuides(
+      canvas,
+      printAreaRef.current,
+      activeSideRef.current
+    )
     recordHistorySnapshot()
 
     const handleSelection = (event) => {
@@ -402,7 +516,8 @@ export default function useDesignEditor(canvasElement) {
       recordHistorySnapshot()
     }
 
-    const handleObjectAddedOrRemoved = () => {
+    const handleObjectAddedOrRemoved = (event) => {
+      if (event?.target?.isPrintBoundary) return
       refreshLayers()
       refreshDesignPreview()
       recordHistorySnapshot()
@@ -694,25 +809,42 @@ export default function useDesignEditor(canvasElement) {
 
   const setPrintArea = useCallback((printAreaData) => {
     const canvas = canvasRef.current
+    if (!canvas) return
 
-    if (!canvas || !printAreaData) return
+    if (printAreaData) {
+      printAreaSpecRef.current = printAreaData
+    }
+    const spec = printAreaData || printAreaSpecRef.current || {}
+    const currentSide = activeSideRef.current || 'front'
 
     const fittedArea = fitPrintAreaToPhysicalRatio(
-      printAreaData.physical_width_cm,
-      printAreaData.physical_height_cm
+      spec.physical_width_cm,
+      spec.physical_height_cm,
+      currentSide
     )
 
     printAreaRef.current = fittedArea
-
-    const boundary = canvas.getObjects().find((object) => object.isPrintBoundary)
-    if (boundary) {
-      boundary.set(fittedArea)
-      boundary.setCoords()
-    }
+    syncPrintBoundaryGuides(canvas, fittedArea, currentSide)
 
     canvas.requestRenderAll()
     refreshDesignPreview()
   }, [refreshDesignPreview])
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const spec = printAreaSpecRef.current || {}
+    const currentSide = activeSideRef.current || 'front'
+    const fittedArea = fitPrintAreaToPhysicalRatio(
+      spec.physical_width_cm,
+      spec.physical_height_cm,
+      currentSide
+    )
+    printAreaRef.current = fittedArea
+    syncPrintBoundaryGuides(canvas, fittedArea, currentSide)
+    canvas.requestRenderAll()
+    refreshDesignPreview()
+  }, [surfaceMapping, refreshDesignPreview])
 
   const serializeCurrentCanvas = useCallback(async () => {
     const canvas = canvasRef.current
@@ -872,9 +1004,7 @@ export default function useDesignEditor(canvasElement) {
 
     canvas.backgroundColor = '#ffffff'
 
-    const boundary = createPrintBoundary(printAreaRef.current)
-    canvas.add(boundary)
-    canvas.sendObjectToBack(boundary)
+    syncPrintBoundaryGuides(canvas, printAreaRef.current, activeSideRef.current)
     canvas.requestRenderAll()
 
     setSelectedObject(null)
@@ -1195,40 +1325,57 @@ export default function useDesignEditor(canvasElement) {
       throw new Error('Kanvas desain belum siap.')
     }
 
-    const placement = customPlacement || analysis?.recommendations?.placement
+    let placement = customPlacement || analysis?.recommendations?.placement
+    if (customPlacement && customPlacement.placementZone && !customPlacement.width_percent) {
+      const preset = PRINT_PLACEMENT_PRESETS.find((p) => p.id === customPlacement.placementZone)
+      if (preset) {
+        placement = {
+          area: preset.side,
+          position_code: preset.id,
+          position_x_percent: preset.xPercent,
+          position_y_percent: preset.yPercent,
+          width_percent: preset.widthPercent,
+        }
+      }
+    }
+
     if (!placement) {
-      throw new Error('Belum ada rekomendasi penempatan AI yang tersedia.')
+      throw new Error('Belum ada rekomendasi penempatan yang tersedia.')
     }
 
     const active = canvas.getActiveObject()
-    const allImages = canvas
+    const allDesignObjects = canvas
       .getObjects()
-      .filter((item) => !item.isPrintBoundary && String(item.type || '').toLowerCase() === 'image')
+      .filter((item) => !item.isPrintBoundary)
+    const allImages = allDesignObjects.filter(
+      (item) => String(item.type || '').toLowerCase() === 'image'
+    )
 
     const lookupId = preferredEditorId || lastAnalyzedObjectIdRef.current
-    const targetImage =
-      (lookupId && allImages.find((item) => item.editorId === lookupId)) ||
-      (active && String(active.type || '').toLowerCase() === 'image' ? active : null) ||
+    const targetObject =
+      (lookupId && allDesignObjects.find((item) => item.editorId === lookupId)) ||
+      (active && !active.isPrintBoundary ? active : null) ||
       allImages[0] ||
+      allDesignObjects[0] ||
       null
 
-    if (!targetImage || !targetImage.width || !targetImage.height) {
-      throw new Error('Tambahkan atau pilih objek gambar pada kanvas untuk menerapkan rekomendasi.')
+    if (!targetObject || !targetObject.width || !targetObject.height) {
+      throw new Error('Tambahkan atau pilih objek desain pada kanvas terlebih dahulu.')
     }
 
     const printArea = printAreaRef.current
-    const widthPercent = Math.min(92, Math.max(12, Number(placement.width_percent) || 50))
-    const posXPercent = Math.min(88, Math.max(12, Number(placement.position_x_percent) || 50))
-    const posYPercent = Math.min(88, Math.max(12, Number(placement.position_y_percent) || 35))
+    const widthPercent = Math.min(98, Math.max(8, Number(placement.width_percent) || 50))
+    const posXPercent = Math.min(97, Math.max(3, Number(placement.position_x_percent) || 50))
+    const posYPercent = Math.min(97, Math.max(3, Number(placement.position_y_percent) || 40))
 
     const desiredWidth = (widthPercent / 100) * printArea.width
-    const maxAllowedHeight = printArea.height * 0.92
-    const scaleByWidth = desiredWidth / targetImage.width
-    const scaleByHeight = maxAllowedHeight / targetImage.height
+    const maxAllowedHeight = printArea.height * 0.98
+    const scaleByWidth = desiredWidth / targetObject.width
+    const scaleByHeight = maxAllowedHeight / targetObject.height
     const nextScale = Math.min(scaleByWidth, scaleByHeight)
 
-    const scaledWidth = targetImage.width * nextScale
-    const scaledHeight = targetImage.height * nextScale
+    const scaledWidth = targetObject.width * nextScale
+    const scaledHeight = targetObject.height * nextScale
 
     const rawCenterX = printArea.left + (posXPercent / 100) * printArea.width
     const rawCenterY = printArea.top + (posYPercent / 100) * printArea.height
@@ -1248,7 +1395,7 @@ export default function useDesignEditor(canvasElement) {
         ? Math.min(maxCenterY, Math.max(minCenterY, rawCenterY))
         : printArea.top + printArea.height / 2
 
-    targetImage.set({
+    targetObject.set({
       originX: 'center',
       originY: 'center',
       left: clampedCenterX,
@@ -1258,13 +1405,14 @@ export default function useDesignEditor(canvasElement) {
       angle: 0,
     })
 
-    targetImage.setCoords()
-    canvas.setActiveObject(targetImage)
+    targetObject.setCoords()
+    canvas.setActiveObject(targetObject)
     canvas.requestRenderAll()
 
-    syncSelectedObject(targetImage)
+    syncSelectedObject(targetObject)
     refreshLayers()
     refreshDesignPreview()
+    recordHistorySnapshot()
 
     return {
       area: placement.area,
@@ -1277,7 +1425,7 @@ export default function useDesignEditor(canvasElement) {
       width: Math.round(scaledWidth),
       height: Math.round(scaledHeight),
     }
-  }, [analysis, refreshDesignPreview, refreshLayers, syncSelectedObject])
+  }, [analysis, recordHistorySnapshot, refreshDesignPreview, refreshLayers, syncSelectedObject])
 
   const analyzeSelectedImage = useCallback(async (options = {}) => {
     const canvas = canvasRef.current

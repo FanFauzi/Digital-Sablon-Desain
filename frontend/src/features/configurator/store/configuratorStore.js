@@ -57,15 +57,26 @@ export const GARMENT_COLOR_PRESETS = [
 
 export const PRINT_PLACEMENT_PRESETS = [
   {
+    id: 'full_surface',
+    code: 'full_surface',
+    zone: 'full_surface',
+    label: 'Full Surface (Seluruh Kaos)',
+    description: 'Desain penuh menutup seluruh permukaan kaos',
+    side: null,
+    position_x_percent: 50,
+    position_y_percent: 50,
+    width_percent: 92,
+  },
+  {
     id: 'front_center',
     code: 'front_center',
     zone: 'front_center',
     label: 'Front Center',
-    description: 'Tengah bagian depan',
+    description: 'Tengah bagian depan dada',
     side: 'front',
     position_x_percent: 50,
-    position_y_percent: 42,
-    width_percent: 72,
+    position_y_percent: 44,
+    width_percent: 38,
   },
   {
     id: 'front_left_chest',
@@ -74,9 +85,9 @@ export const PRINT_PLACEMENT_PRESETS = [
     label: 'Front Left Chest',
     description: 'Dada kiri (Logo Pocket)',
     side: 'front',
-    position_x_percent: 72,
-    position_y_percent: 22,
-    width_percent: 25,
+    position_x_percent: 61,
+    position_y_percent: 28,
+    width_percent: 15,
   },
   {
     id: 'front_right_chest',
@@ -85,9 +96,9 @@ export const PRINT_PLACEMENT_PRESETS = [
     label: 'Front Right Chest',
     description: 'Dada kanan',
     side: 'front',
-    position_x_percent: 28,
-    position_y_percent: 22,
-    width_percent: 25,
+    position_x_percent: 39,
+    position_y_percent: 28,
+    width_percent: 15,
   },
   {
     id: 'back_center',
@@ -97,8 +108,8 @@ export const PRINT_PLACEMENT_PRESETS = [
     description: 'Tengah bagian belakang',
     side: 'back',
     position_x_percent: 50,
-    position_y_percent: 45,
-    width_percent: 78,
+    position_y_percent: 44,
+    width_percent: 40,
   },
   {
     id: 'back_upper',
@@ -108,8 +119,8 @@ export const PRINT_PLACEMENT_PRESETS = [
     description: 'Punggung atas / bawah kerah',
     side: 'back',
     position_x_percent: 50,
-    position_y_percent: 18,
-    width_percent: 34,
+    position_y_percent: 22,
+    width_percent: 22,
   },
   {
     id: 'left_sleeve',
@@ -120,7 +131,7 @@ export const PRINT_PLACEMENT_PRESETS = [
     side: 'left_sleeve',
     position_x_percent: 50,
     position_y_percent: 48,
-    width_percent: 65,
+    width_percent: 55,
   },
   {
     id: 'right_sleeve',
@@ -131,7 +142,7 @@ export const PRINT_PLACEMENT_PRESETS = [
     side: 'right_sleeve',
     position_x_percent: 50,
     position_y_percent: 48,
-    width_percent: 65,
+    width_percent: 55,
   },
 ]
 
@@ -231,6 +242,20 @@ export const useConfiguratorStore = create((set) => ({
   garmentStyle: 'regular', // 'regular' | 'oversized' | 'hoodie'
   customModels: {}, // { regular: { url, format, fileName }, oversized: { url, format, fileName }, ... }
   activeModelLabel: '',
+  surfaceMapping: {
+    aspectRatios: {
+      front: 0.92,
+      back: 0.92,
+      left_sleeve: 0.72,
+      right_sleeve: 0.72,
+    },
+    silhouettes: {
+      front: null,
+      back: null,
+      left_sleeve: null,
+      right_sleeve: null,
+    },
+  },
   cameraView: 'front', // 'front' | 'back' | 'left_sleeve' | 'right_sleeve'
   cameraZoom: 1.0,
   cameraResetTrigger: 0,
@@ -245,6 +270,7 @@ export const useConfiguratorStore = create((set) => ({
   setWorkspaceMode: (workspaceMode) => set({ workspaceMode }),
   setGarmentStyle: (garmentStyle) => set({ garmentStyle }),
   setActiveModelLabel: (activeModelLabel) => set({ activeModelLabel }),
+  setSurfaceMapping: (surfaceMapping) => set({ surfaceMapping }),
 
   setCustomModelForStyle: (styleId, modelInfo) =>
     set((state) => ({
