@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react'
+import { useRef, useEffect, useState, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
 
 import useDesignEditor from '../features/editor/hooks/useDesignEditor'
@@ -16,15 +16,38 @@ import PropertiesPanel from '../features/editor/components/PropertiesPanel'
 import LayerPanel from '../features/editor/components/LayerPanel'
 import AIAnalysisPanel from '../features/editor/components/AIAnalysisPanel'
 import ShirtPreview3D from '../features/editor/components/ShirtPreview3D'
+import Sidebar from '../features/configurator/components/Sidebar'
+import { useConfiguratorStore } from '../features/configurator/store/configuratorStore'
+
+const SIDE_LABELS = {
+  front: 'FRONT (DEPAN)',
+  back: 'BACK (BELAKANG)',
+  left_sleeve: 'LEFT SLEEVE (LENGAN KIRI)',
+  right_sleeve: 'RIGHT SLEEVE (LENGAN KANAN)',
+}
 
 export default function EditorPage() {
   const { shirtId } = useParams()
 
   const canvasElement = useRef(null)
   const viewportRef = useRef(null)
+  const sceneContextRef = useRef(null)
 
   const editor = useDesignEditor(canvasElement)
   const { resizeCanvas, setPrintArea, resetSideDesigns } = editor
+
+  const workspaceMode = useConfiguratorStore((s) => s.workspaceMode)
+  const setWorkspaceMode = useConfiguratorStore((s) => s.setWorkspaceMode)
+  const garmentStyle = useConfiguratorStore((s) => s.garmentStyle)
+  const setGarmentStyle = useConfiguratorStore((s) => s.setGarmentStyle)
+  const setCameraView = useConfiguratorStore((s) => s.setCameraView)
+  const setActiveTab = useConfiguratorStore((s) => s.setActiveTab)
+  const background = useConfiguratorStore((s) => s.background)
+  const materialEffects = useConfiguratorStore((s) => s.materialEffects)
+  const motion = useConfiguratorStore((s) => s.motion)
+  const restoreConfiguratorConfig = useConfiguratorStore(
+    (s) => s.restoreConfiguratorConfig
+  )
 
   const [shirt, setShirt] = useState(null)
   const [shirtLoading, setShirtLoading] = useState(true)
@@ -40,6 +63,10 @@ export default function EditorPage() {
   const [projectMessage, setProjectMessage] = useState('')
   const [projectMessageType, setProjectMessageType] = useState('success')
 
+  const handleSceneReady = useCallback((ctx) => {
+    sceneContextRef.current = ctx
+  }, [])
+
   useEffect(() => {
     let isMounted = true
 
@@ -51,14 +78,29 @@ export default function EditorPage() {
         const data = await getShirtById(shirtId)
         if (!isMounted) return
 
-        const frontPrintArea = data.print_areas?.find((area) => area.view_side === 'front')
+        const frontPrintArea = data.print_areas?.find(
+          (area) => area.view_side === 'front'
+        )
         await resetSideDesigns(frontPrintArea)
         if (!isMounted) return
 
         setShirt(data)
         setSelectedSide('front')
+        setCameraView('front')
         setActiveProjectId(null)
         setProjectName('Desain Saya')
+
+        const lowerName = String(data.name || '').toLowerCase()
+        if (data.type === 'hoodie' || lowerName.includes('hoodie')) {
+          setGarmentStyle('hoodie')
+        } else if (
+          data.type === 'oversized' ||
+          lowerName.includes('oversized')
+        ) {
+          setGarmentStyle('oversized')
+        } else {
+          setGarmentStyle('regular')
+        }
 
         const firstVariant =
           data.variants?.find((variant) => variant.size === 'M') ||
@@ -71,7 +113,9 @@ export default function EditorPage() {
       } catch (error) {
         console.error(error)
         if (isMounted) {
-          setShirtError('Detail produk gagal dimuat. Pastikan server Laravel aktif.')
+          setShirtError(
+            'Detail produk gagal dimuat. Pastikan server Laravel aktif.'
+          )
         }
       } finally {
         if (isMounted) setShirtLoading(false)
@@ -83,7 +127,7 @@ export default function EditorPage() {
     return () => {
       isMounted = false
     }
-  }, [shirtId, resetSideDesigns])
+  }, [shirtId, resetSideDesigns, setCameraView, setGarmentStyle])
 
   useEffect(() => {
     let isMounted = true
@@ -95,7 +139,9 @@ export default function EditorPage() {
       .catch((error) => {
         console.error(error)
         if (isMounted) {
-          setProjectMessage('Daftar proyek gagal dimuat. Periksa koneksi server dan sesi akun.')
+          setProjectMessage(
+            'Daftar proyek gagal dimuat. Periksa koneksi server dan sesi akun.'
+          )
           setProjectMessageType('error')
         }
       })
@@ -111,12 +157,9 @@ export default function EditorPage() {
     if (!viewport) return
 
     const updateCanvasSize = () => {
-      const availableWidth = viewport.clientWidth
+      const availableWidth = viewport.clientWidth || 420
 
-      const displayWidth = Math.min(
-        availableWidth,
-        EDITOR_CONFIG.width
-      )
+      const displayWidth = Math.min(availableWidth, EDITOR_CONFIG.width)
 
       resizeCanvas(displayWidth)
     }
@@ -127,7 +170,7 @@ export default function EditorPage() {
     updateCanvasSize()
 
     return () => observer.disconnect()
-  }, [resizeCanvas])
+  }, [resizeCanvas, workspaceMode])
 
   const colorOptions = [
     ...new Map(
@@ -144,20 +187,35 @@ export default function EditorPage() {
   const sizeOptions = [
     ...new Set(
       (shirt?.variants || [])
-        .filter((variant) => variant.color_hex === selectedColor)
+        .filter(
+          (variant) =>
+            String(variant.color_hex).toLowerCase() ===
+            String(selectedColor).toLowerCase()
+        )
         .map((variant) => variant.size)
     ),
   ]
 
-  const selectedVariant = shirt?.variants?.find(
-    (variant) =>
-      variant.color_hex === selectedColor &&
-      variant.size === selectedSize
-  )
+  const allSizes =
+    sizeOptions.length > 0
+      ? sizeOptions
+      : [
+          ...new Set(
+            (shirt?.variants || []).map((variant) => variant.size)
+          ),
+        ]
 
-  const printArea = shirt?.print_areas?.find(
-    (area) => area.view_side === selectedSide
-  )
+  const selectedVariant =
+    shirt?.variants?.find(
+      (variant) =>
+        String(variant.color_hex).toLowerCase() ===
+          String(selectedColor).toLowerCase() &&
+        variant.size === selectedSize
+    ) || shirt?.variants?.[0]
+
+  const printArea =
+    shirt?.print_areas?.find((area) => area.view_side === selectedSide) ||
+    shirt?.print_areas?.find((area) => area.view_side === 'front')
 
   useEffect(() => {
     if (printArea) setPrintArea(printArea)
@@ -180,6 +238,10 @@ export default function EditorPage() {
           selected_color: selectedColor,
           selected_size: selectedSize,
           selected_side: selectedSide,
+          garment_style: garmentStyle,
+          background,
+          material_effects: materialEffects,
+          motion,
         },
         editor_state: canvasState,
       })
@@ -187,7 +249,7 @@ export default function EditorPage() {
       setActiveProjectId(saved.id)
       setProjectName(saved.name)
       setSavedProjects(await getEditorProjects(shirtId))
-      setProjectMessage('Proyek berhasil disimpan ke akun.')
+      setProjectMessage('Proyek 3D berhasil disimpan ke akun.')
       setProjectMessageType('success')
     } catch (error) {
       console.error(error)
@@ -206,13 +268,15 @@ export default function EditorPage() {
 
     try {
       const loadedProject = await loadEditorProject(project)
-      await editor.restoreCanvas(
-        loadedProject.canvasState,
-        loadedProject.selectedSide || 'front'
-      )
+      const targetSide = loadedProject.selectedSide || 'front'
+      await editor.restoreCanvas(loadedProject.canvasState, targetSide)
       setSelectedColor(loadedProject.selectedColor || selectedColor)
       setSelectedSize(loadedProject.selectedSize || 'M')
-      setSelectedSide(loadedProject.selectedSide || 'front')
+      setSelectedSide(targetSide)
+      setCameraView(targetSide)
+      if (loadedProject.canvasConfig) {
+        restoreConfiguratorConfig(loadedProject.canvasConfig)
+      }
       setProjectName(loadedProject.name || 'Desain Saya')
       setActiveProjectId(project.id)
       setProjectMessage(`Proyek "${loadedProject.name}" berhasil dibuka.`)
@@ -267,6 +331,7 @@ export default function EditorPage() {
       )
       await resetSideDesigns(frontPrintArea)
       setSelectedSide('front')
+      setCameraView('front')
       setActiveProjectId(null)
       setProjectName('Desain Saya')
       setProjectMessage('Area kerja direset untuk proyek baru.')
@@ -290,15 +355,18 @@ export default function EditorPage() {
       return
     }
 
-    const nextPrintArea = shirt.print_areas?.find(
-      (area) => area.view_side === nextSide
-    )
+    const nextPrintArea =
+      shirt.print_areas?.find((area) => area.view_side === nextSide) ||
+      shirt.print_areas?.find((area) => area.view_side === 'front')
 
     setIsSwitchingSide(true)
 
     try {
       const switched = await editor.switchDesignSide(nextSide, nextPrintArea)
-      if (switched) setSelectedSide(nextSide)
+      if (switched) {
+        setSelectedSide(nextSide)
+        setCameraView(nextSide)
+      }
     } catch (error) {
       console.error(error)
       alert(error.message || 'Gagal mengganti sisi desain.')
@@ -311,7 +379,11 @@ export default function EditorPage() {
     setSelectedColor(colorHex)
 
     const availableSizes = (shirt?.variants || [])
-      .filter((variant) => variant.color_hex === colorHex)
+      .filter(
+        (variant) =>
+          String(variant.color_hex).toLowerCase() ===
+          String(colorHex).toLowerCase()
+      )
       .map((variant) => variant.size)
 
     if (availableSizes.length > 0) {
@@ -326,26 +398,85 @@ export default function EditorPage() {
   }
 
   return (
-    <main className="editor-page">
-      <div className="editor-header">
-        <div>
-          <span className="eyebrow">DESIGN STUDIO</span>
-          <h1>Customize Your Product</h1>
-          <p>
-            {shirtLoading
-              ? `Memuat produk #${shirtId}...`
-              : shirt
-                ? shirt.name
-                : `Produk ID: ${shirtId}`}
-          </p>
+    <main className="editor-page studio-3d-page">
+      {/* Top Studio Bar */}
+      <header className="studio-topbar">
+        <div className="studio-topbar-brand">
+          <span className="eyebrow">DIGITAL SABLON · 3D CONFIGURATOR STUDIO</span>
+          <div className="studio-topbar-title-row">
+            <h1>{shirtLoading ? `Memuat #${shirtId}...` : shirt?.name || '3D Studio'}</h1>
+            <span className="studio-badge">{garmentStyle.toUpperCase()}</span>
+            <span className="studio-badge secondary">
+              {SIDE_LABELS[selectedSide] || selectedSide.toUpperCase()}
+            </span>
+          </div>
         </div>
-      </div>
 
+        <div className="studio-workspace-switcher" role="group" aria-label="Mode Tampilan Studio">
+          <button
+            type="button"
+            className={workspaceMode === 'split' ? 'active' : ''}
+            onClick={() => setWorkspaceMode('split')}
+          >
+            Split 3D + 2D
+          </button>
+          <button
+            type="button"
+            className={workspaceMode === '3d' ? 'active' : ''}
+            onClick={() => setWorkspaceMode('3d')}
+          >
+            Full 3D Studio
+          </button>
+          <button
+            type="button"
+            className={workspaceMode === '2d' ? 'active' : ''}
+            onClick={() => setWorkspaceMode('2d')}
+          >
+            Full 2D Canvas
+          </button>
+        </div>
+
+        <div className="studio-topbar-actions">
+          <input
+            type="text"
+            className="studio-project-input"
+            value={projectName}
+            maxLength={100}
+            onChange={(e) => setProjectName(e.target.value)}
+            placeholder="Nama proyek..."
+          />
+          <button
+            type="button"
+            className="studio-btn-primary"
+            onClick={handleSaveProject}
+            disabled={projectBusy || isSwitchingSide}
+          >
+            {projectBusy ? 'Menyimpan...' : activeProjectId ? 'Simpan' : 'Simpan Proyek'}
+          </button>
+          <button
+            type="button"
+            className="studio-btn-secondary"
+            onClick={handleNewProject}
+            disabled={projectBusy || isSwitchingSide}
+          >
+            Proyek Baru
+          </button>
+          <button
+            type="button"
+            className="studio-btn-accent"
+            onClick={() => setActiveTab('export')}
+          >
+            ⬇ Export
+          </button>
+        </div>
+      </header>
+
+      {/* Quick Action Bar */}
       <EditorToolbar
         editor={editor}
         exportOptions={{
           shirtName: shirt?.name,
-          shirtType: shirt?.type,
+          shirtType: shirt?.type || garmentStyle,
           side: selectedSide,
           selectedColor,
           printArea,
@@ -354,8 +485,17 @@ export default function EditorPage() {
         }}
       />
 
+      {projectMessage && (
+        <p
+          className={`project-feedback ${projectMessageType === 'error' ? 'error' : 'success'}`}
+          role="status"
+        >
+          {projectMessage}
+        </p>
+      )}
+
       {shirtLoading && (
-        <div className="configurator-message">Memuat detail produk...</div>
+        <div className="configurator-message">Memuat studio 3D & model pakaian...</div>
       )}
 
       {shirtError && (
@@ -364,231 +504,113 @@ export default function EditorPage() {
         </div>
       )}
 
-      {!shirtLoading && shirt && (
-        <section className="shirt-configurator">
-          <div className="shirt-preview-column">
-            <div className="configurator-section-heading">
-              <div>
-                <span className="eyebrow">LIVE PRODUCT VIEW</span>
-                <h2>Preview Produk 3D</h2>
+      {/* Main 3-Column Studio Layout (Sidebar | 3D + 2D Workspace | Properties & AI) */}
+      <div className="studio-3d-workspace">
+        {/* A. Left Sidebar Navigation (7 Menu PRD) */}
+        <Sidebar
+          editor={editor}
+          shirt={shirt}
+          selectedColor={selectedColor}
+          selectedSize={selectedSize}
+          selectedSide={selectedSide}
+          colorOptions={colorOptions}
+          sizeOptions={allSizes}
+          printArea={printArea}
+          isSwitchingSide={isSwitchingSide}
+          activeProjectId={activeProjectId}
+          onColorChange={handleColorChange}
+          onSizeChange={setSelectedSize}
+          onSideChange={handleSideChange}
+          sceneContextRef={sceneContextRef}
+        />
+
+        {/* B. Center Main 3D Preview & 2D Interactive Canvas */}
+        <section className={`studio-center-stage mode-${workspaceMode}`}>
+          {/* Pane 1: Interactive 3D Viewer */}
+          {workspaceMode !== '2d' && (
+            <div className="studio-3d-pane">
+              <div className="studio-pane-header">
+                <div>
+                  <span className="eyebrow">REAL-TIME 3D CONFIGURATOR</span>
+                  <h2>
+                    {shirt?.name || 'Garment'} · {selectedColor} · Size {selectedSize}
+                  </h2>
+                </div>
+                <div className="studio-side-pills">
+                  {(['front', 'back', 'left_sleeve', 'right_sleeve']).map((sideKey) => (
+                    <button
+                      key={sideKey}
+                      type="button"
+                      className={selectedSide === sideKey ? 'active' : ''}
+                      onClick={() => handleSideChange(sideKey)}
+                      disabled={isSwitchingSide || projectBusy}
+                    >
+                      {sideKey === 'front'
+                        ? 'Depan'
+                        : sideKey === 'back'
+                          ? 'Belakang'
+                          : sideKey === 'left_sleeve'
+                            ? 'Lengan Kiri'
+                            : 'Lengan Kanan'}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <span className="preview-side-label">
-                {selectedSide === 'front' ? 'TAMPAK DEPAN' : 'TAMPAK BELAKANG'}
-              </span>
+
+              <ShirtPreview3D
+                color={selectedColor}
+                side={selectedSide}
+                productType={shirt?.type || garmentStyle}
+                designPreview={editor.designPreview}
+                designPreviewVersion={editor.designPreviewVersion}
+                sidePreviews={editor.sidePreviews}
+                onSceneReady={handleSceneReady}
+                onSelectSide={handleSideChange}
+              />
             </div>
-
-            <ShirtPreview3D
-              color={selectedColor}
-              side={selectedSide}
-              productType={shirt.type}
-              designPreview={editor.designPreview}
-              designPreviewVersion={editor.designPreviewVersion}
-              sidePreviews={editor.sidePreviews}
-            />
-
-            <p className="preview-product-name">
-              {shirt.name} · {selectedVariant?.color_name || 'Warna belum dipilih'}
-              {selectedVariant ? ` · Size ${selectedVariant.size}` : ''}
-            </p>
-          </div>
-
-          <aside className="shirt-configurator-controls">
-            <span className="eyebrow">PRODUCT CONFIGURATION</span>
-            <h2>{shirt.name}</h2>
-            <p className="product-description">
-              {shirt.description || 'Pilih varian produk untuk melihat pratinjau.'}
-            </p>
-
-            <div className="config-control-group">
-              <div className="config-control-label">
-                <strong>Warna kaos</strong>
-                <span>{colorOptions.find((item) => item.colorHex === selectedColor)?.colorName}</span>
-              </div>
-
-              <div className="shirt-color-options">
-                {colorOptions.map((item) => (
-                  <button
-                    key={item.colorHex}
-                    type="button"
-                    className={`shirt-color-option ${selectedColor === item.colorHex ? 'selected' : ''}`}
-                    style={{ '--swatch-color': item.colorHex }}
-                    aria-label={`Pilih warna ${item.colorName}`}
-                    aria-pressed={selectedColor === item.colorHex}
-                    title={item.colorName}
-                    onClick={() => handleColorChange(item.colorHex)}
-                  />
-                ))}
-              </div>
-            </div>
-
-            <div className="config-control-group">
-              <div className="config-control-label">
-                <strong>Ukuran</strong>
-                <span>{selectedSize}</span>
-              </div>
-
-              <div className="shirt-size-options">
-                {sizeOptions.map((size) => (
-                  <button
-                    key={size}
-                    type="button"
-                    className={selectedSize === size ? 'selected' : ''}
-                    aria-pressed={selectedSize === size}
-                    onClick={() => setSelectedSize(size)}
-                  >
-                    {size}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="config-control-group">
-              <div className="config-control-label">
-                <strong>Sisi desain</strong>
-              </div>
-
-              <div className="shirt-side-options">
-                <button
-                  type="button"
-                  className={selectedSide === 'front' ? 'selected' : ''}
-                  aria-pressed={selectedSide === 'front'}
-                  onClick={() => handleSideChange('front')}
-                  disabled={isSwitchingSide || projectBusy}
-                >
-                  Depan
-                </button>
-                <button
-                  type="button"
-                  className={selectedSide === 'back' ? 'selected' : ''}
-                  aria-pressed={selectedSide === 'back'}
-                  onClick={() => handleSideChange('back')}
-                  disabled={isSwitchingSide || projectBusy}
-                >
-                  Belakang
-                </button>
-              </div>
-            </div>
-
-            {printArea && (
-              <div className="print-area-summary">
-                <span>AREA CETAK {selectedSide === 'front' ? 'DEPAN' : 'BELAKANG'}</span>
-                <strong>
-                  {printArea.physical_width_cm} × {printArea.physical_height_cm} cm
-                </strong>
-                <small>Resolusi acuan: {printArea.dpi} DPI</small>
-              </div>
-            )}
-          </aside>
-        </section>
-      )}
-
-      {shirt && (
-        <section className="project-manager">
-          <div className="project-manager-header">
-            <div>
-              <span className="eyebrow">SAVED PROJECTS</span>
-              <h2>Simpan & Buka Desain</h2>
-              <p>Proyek akun tersimpan di server dan dapat dibuka dari perangkat lain. Proyek lokal lama tetap tersedia sebagai cadangan.</p>
-            </div>
-            <div className="project-save-controls">
-              <label className="project-name-field">
-                <span>Nama proyek</span>
-                <input
-                  type="text"
-                  value={projectName}
-                  maxLength={100}
-                  onChange={(event) => setProjectName(event.target.value)}
-                  placeholder="Contoh: Kaos Komunitas"
-                />
-              </label>
-              <button
-                type="button"
-                className="project-save-button"
-                onClick={handleSaveProject}
-                disabled={projectBusy || isSwitchingSide}
-              >
-                {projectBusy ? 'Memproses...' : activeProjectId ? 'Simpan Perubahan' : 'Simpan Proyek'}
-              </button>
-              <button
-                type="button"
-                onClick={handleNewProject}
-                disabled={projectBusy || isSwitchingSide}
-              >
-                Proyek Baru
-              </button>
-            </div>
-          </div>
-
-          {projectMessage && (
-            <p
-              className={`project-feedback ${projectMessageType === 'error' ? 'error' : 'success'}`}
-              role="status"
-            >
-              {projectMessage}
-            </p>
           )}
 
-          <div className="saved-project-list">
-            {savedProjects.length === 0 ? (
-              <p className="saved-project-empty">Belum ada proyek tersimpan untuk produk ini.</p>
-            ) : (
-              savedProjects.map((project) => (
-                <article className="saved-project-item" key={project.id}>
-                  <div className="saved-project-info">
-                    <strong>{project.name}</strong>
-                    <span>
-                      {new Date(project.updatedAt).toLocaleString('id-ID')}
-                      {project.storageType === 'cloud' ? ' · Akun' : ' · Lokal'}
-                      {project.selectedColor ? ` · ${project.selectedColor}` : ''}
-                      {project.selectedSize ? ` · Size ${project.selectedSize}` : ''}
-                    </span>
-                  </div>
-                  <div className="saved-project-actions">
-                    <button
-                      type="button"
-                      onClick={() => handleLoadProject(project)}
-                      disabled={projectBusy || isSwitchingSide}
-                    >
-                      Buka
-                    </button>
-                    <button
-                      type="button"
-                      className="project-delete-button"
-                      onClick={() => handleDeleteProject(project)}
-                      disabled={projectBusy || isSwitchingSide}
-                    >
-                      Hapus
-                    </button>
-                  </div>
-                </article>
-              ))
-            )}
-          </div>
-        </section>
-      )}
-
-      <div className="editor-layout">
-        <section className="editor-main">
+          {/* Pane 2: 2D Fabric.js Placement Canvas (Always mounted so textures stay live) */}
           <div
-            className="canvas-viewport"
-            ref={viewportRef}
+            className={`studio-2d-pane ${
+              workspaceMode === '3d' ? 'studio-2d-pane-hidden' : ''
+            }`}
           >
-            <canvas ref={canvasElement} />
-          </div>
+            <div className="studio-pane-header">
+              <div>
+                <span className="eyebrow">2D PRINT AREA EDITOR</span>
+                <h2>
+                  Area Cetak: {SIDE_LABELS[selectedSide] || selectedSide.toUpperCase()}
+                </h2>
+              </div>
+              {printArea && (
+                <span className="studio-print-spec">
+                  {printArea.physical_width_cm} × {printArea.physical_height_cm} cm ·{' '}
+                  {printArea.dpi || 300} DPI
+                </span>
+              )}
+            </div>
 
-          <div className="canvas-info">
-            Area desain {EDITOR_CONFIG.width} × {EDITOR_CONFIG.height} unit
+            <div className="canvas-viewport" ref={viewportRef}>
+              <canvas ref={canvasElement} />
+            </div>
+
+            <div className="canvas-info">
+              Kanvas {EDITOR_CONFIG.width} × {EDITOR_CONFIG.height} px · Perubahan pada
+              kanvas langsung diterapkan ke tekstur 3D secara real-time.
+            </div>
           </div>
         </section>
 
-        <aside className="editor-sidebar">
+        {/* C. Right Properties, Layers, AI Recommendations & Saved Projects */}
+        <aside className="studio-right-inspector">
           <PropertiesPanel editor={editor} />
           <LayerPanel editor={editor} />
           <AIAnalysisPanel
             editor={editor}
             productContext={{
               projectId: activeProjectId,
-              shirtType: shirt?.type,
+              shirtType: shirt?.type || garmentStyle,
               selectedSide,
               selectedColor,
               colorOptions,
@@ -596,6 +618,48 @@ export default function EditorPage() {
               onSelectSide: handleSideChange,
             }}
           />
+
+          {/* Saved Projects Panel */}
+          <section className="editor-panel saved-projects-panel">
+            <h3>Proyek Tersimpan ({savedProjects.length})</h3>
+            {savedProjects.length === 0 ? (
+              <p className="saved-project-empty">
+                Belum ada proyek tersimpan untuk produk ini.
+              </p>
+            ) : (
+              <div className="saved-project-compact-list">
+                {savedProjects.map((project) => (
+                  <article className="saved-project-item" key={project.id}>
+                    <div className="saved-project-info">
+                      <strong>{project.name}</strong>
+                      <span>
+                        {new Date(project.updatedAt).toLocaleDateString('id-ID')}
+                        {project.storageType === 'cloud' ? ' · Cloud' : ' · Lokal'}
+                        {project.selectedColor ? ` · ${project.selectedColor}` : ''}
+                      </span>
+                    </div>
+                    <div className="saved-project-actions">
+                      <button
+                        type="button"
+                        onClick={() => handleLoadProject(project)}
+                        disabled={projectBusy || isSwitchingSide}
+                      >
+                        Buka
+                      </button>
+                      <button
+                        type="button"
+                        className="project-delete-button"
+                        onClick={() => handleDeleteProject(project)}
+                        disabled={projectBusy || isSwitchingSide}
+                      >
+                        Hapus
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
         </aside>
       </div>
     </main>

@@ -19,7 +19,7 @@ export default function EditorToolbar({ editor, exportOptions }) {
         + Upload Desain
         <input
           type="file"
-          accept="image/png,image/jpeg"
+          accept="image/png,image/jpeg,image/webp"
           hidden
           onChange={handleUpload}
           disabled={exportOptions?.isSwitchingSide}
@@ -28,6 +28,32 @@ export default function EditorToolbar({ editor, exportOptions }) {
 
       <button onClick={editor.addText} disabled={exportOptions?.isSwitchingSide}>
         + Tambah Teks
+      </button>
+
+      <button
+        type="button"
+        onClick={() => editor.duplicateSelected?.()}
+        disabled={!editor.selectedObject || exportOptions?.isSwitchingSide}
+      >
+        ⧉ Duplikat
+      </button>
+
+      <button
+        type="button"
+        onClick={() => editor.undo?.()}
+        disabled={!editor.canUndo || exportOptions?.isSwitchingSide}
+        title="Undo"
+      >
+        ↶ Undo
+      </button>
+
+      <button
+        type="button"
+        onClick={() => editor.redo?.()}
+        disabled={!editor.canRedo || exportOptions?.isSwitchingSide}
+        title="Redo"
+      >
+        ↷ Redo
       </button>
 
       <button

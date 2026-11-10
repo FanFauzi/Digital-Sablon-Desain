@@ -215,9 +215,17 @@ export default function useDesignEditor(canvasElement) {
   const canvasRef = useRef(null)
   const printAreaRef = useRef({ ...EDITOR_CONFIG.printArea })
   const activeSideRef = useRef('front')
-  const sideSnapshotsRef = useRef({ front: null, back: null })
+  const sideSnapshotsRef = useRef({
+    front: null,
+    back: null,
+    left_sleeve: null,
+    right_sleeve: null,
+  })
   const isSwitchingSideRef = useRef(false)
   const imageAssetsRef = useRef(new Map())
+  const historyRef = useRef({ past: [], future: [], isRestoring: false })
+  const [canUndo, setCanUndo] = useState(false)
+  const [canRedo, setCanRedo] = useState(false)
 
   const [selectedObject, setSelectedObject] = useState(null)
   const [layers, setLayers] = useState([])
@@ -255,6 +263,7 @@ export default function useDesignEditor(canvasElement) {
       width: Math.round(object.getScaledWidth()),
       height: Math.round(object.getScaledHeight()),
       angle: Math.round(object.angle || 0),
+      opacity: Math.round((object.opacity ?? 1) * 100),
       type: object.type,
       ...(isText
         ? {
@@ -270,7 +279,12 @@ export default function useDesignEditor(canvasElement) {
 
   const [designPreview, setDesignPreview] = useState(null)
   const [designPreviewVersion, setDesignPreviewVersion] = useState(0)
-  const [sidePreviews, setSidePreviews] = useState({ front: null, back: null })
+  const [sidePreviews, setSidePreviews] = useState({
+    front: null,
+    back: null,
+    left_sleeve: null,
+    right_sleeve: null,
+  })
 
   const refreshDesignPreview = useCallback(() => {
     const canvas = canvasRef.current
@@ -323,6 +337,26 @@ export default function useDesignEditor(canvasElement) {
     }
   }, [])
 
+  const recordHistorySnapshot = useCallback(() => {
+    const canvas = canvasRef.current
+    if (!canvas || historyRef.current.isRestoring || isSwitchingSideRef.current) return
+
+    const designObjects = canvas
+      .getObjects()
+      .filter((object) => !object.isPrintBoundary)
+      .map((object) => object.toObject(SERIALIZED_OBJECT_PROPS))
+
+    const serialized = JSON.stringify(designObjects)
+    const past = historyRef.current.past
+    if (past.length > 0 && past[past.length - 1] === serialized) return
+
+    past.push(serialized)
+    if (past.length > 25) past.shift()
+    historyRef.current.future = []
+    setCanUndo(past.length > 1)
+    setCanRedo(false)
+  }, [])
+
   useEffect(() => {
     if (!canvasElement.current) return
 
@@ -340,6 +374,7 @@ export default function useDesignEditor(canvasElement) {
 
     canvas.add(boundary)
     canvas.sendObjectToBack(boundary)
+    recordHistorySnapshot()
 
     const handleSelection = (event) => {
       const object = event.selected?.[0] || event.target
@@ -361,6 +396,18 @@ export default function useDesignEditor(canvasElement) {
       refreshLayers()
     }
 
+    const handleObjectModified = (event) => {
+      handleObjectChanged(event)
+      refreshDesignPreview()
+      recordHistorySnapshot()
+    }
+
+    const handleObjectAddedOrRemoved = () => {
+      refreshLayers()
+      refreshDesignPreview()
+      recordHistorySnapshot()
+    }
+
     const handleTextChanged = (event) => {
       const object = event?.target || canvas.getActiveObject()
       if (object && typeof object.text === 'string') {
@@ -371,6 +418,7 @@ export default function useDesignEditor(canvasElement) {
       }
       refreshLayers()
       refreshDesignPreview()
+      recordHistorySnapshot()
     }
 
     canvas.on('selection:created', handleSelection)
@@ -380,12 +428,9 @@ export default function useDesignEditor(canvasElement) {
     canvas.on('object:moving', handleObjectChanged)
     canvas.on('object:scaling', handleObjectChanged)
     canvas.on('object:rotating', handleObjectChanged)
-    canvas.on('object:modified', handleObjectChanged)
-    canvas.on('object:modified', refreshDesignPreview)
-    canvas.on('object:added', refreshLayers)
-    canvas.on('object:added', refreshDesignPreview)
-    canvas.on('object:removed', refreshLayers)
-    canvas.on('object:removed', refreshDesignPreview)
+    canvas.on('object:modified', handleObjectModified)
+    canvas.on('object:added', handleObjectAddedOrRemoved)
+    canvas.on('object:removed', handleObjectAddedOrRemoved)
     canvas.on('text:changed', handleTextChanged)
     canvas.on('text:editing:exited', handleTextChanged)
 
@@ -393,15 +438,15 @@ export default function useDesignEditor(canvasElement) {
       canvas.dispose()
       canvasRef.current = null
     }
-  }, [canvasElement, refreshLayers, refreshDesignPreview, syncSelectedObject])
+  }, [canvasElement, recordHistorySnapshot, refreshLayers, refreshDesignPreview, syncSelectedObject])
 
   const uploadImage = useCallback(async (file) => {
     const canvas = canvasRef.current
 
     if (!canvas || !file) return
 
-    if (!['image/png', 'image/jpeg'].includes(file.type)) {
-      throw new Error('Format gambar harus PNG atau JPG.')
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+      throw new Error('Format gambar harus PNG, JPG, atau WEBP.')
     }
 
     if (file.size > MAX_UPLOAD_SIZE_BYTES) {
@@ -488,6 +533,34 @@ export default function useDesignEditor(canvasElement) {
     refreshLayers()
   }, [refreshLayers, syncSelectedObject])
 
+  const duplicateSelected = useCallback(async () => {
+    const canvas = canvasRef.current
+    const active = canvas?.getActiveObject()
+    if (!canvas || !active || active.isPrintBoundary) return
+
+    const cloned = await active.clone(SERIALIZED_OBJECT_PROPS)
+    const newId = crypto.randomUUID()
+    cloned.set({
+      left: (active.left || 500) + 32,
+      top: (active.top || 600) + 32,
+    })
+    cloned.editorId = newId
+    cloned.editorName = `${active.editorName || 'Objek'} (Copy)`
+
+    if (active.editorId && imageAssetsRef.current.has(active.editorId)) {
+      const sourceMeta = imageAssetsRef.current.get(active.editorId)
+      imageAssetsRef.current.set(newId, { ...sourceMeta })
+    }
+
+    canvas.add(cloned)
+    canvas.setActiveObject(cloned)
+    canvas.requestRenderAll()
+
+    syncSelectedObject(cloned)
+    refreshLayers()
+    refreshDesignPreview()
+  }, [refreshDesignPreview, refreshLayers, syncSelectedObject])
+
   const deleteSelected = useCallback(() => {
     const canvas = canvasRef.current
     const active = canvas?.getActiveObject()
@@ -514,7 +587,8 @@ export default function useDesignEditor(canvasElement) {
     canvas.requestRenderAll()
     syncSelectedObject(active)
     refreshDesignPreview()
-  }, [refreshDesignPreview, syncSelectedObject])
+    recordHistorySnapshot()
+  }, [recordHistorySnapshot, refreshDesignPreview, syncSelectedObject])
 
   const moveLayer = useCallback((id, direction) => {
     const canvas = canvasRef.current
@@ -545,7 +619,8 @@ export default function useDesignEditor(canvasElement) {
     syncSelectedObject(object)
     refreshLayers()
     refreshDesignPreview()
-  }, [refreshDesignPreview, refreshLayers, syncSelectedObject])
+    recordHistorySnapshot()
+  }, [recordHistorySnapshot, refreshDesignPreview, refreshLayers, syncSelectedObject])
 
   const selectLayer = useCallback((id) => {
     const canvas = canvasRef.current
@@ -580,6 +655,7 @@ export default function useDesignEditor(canvasElement) {
       canvas.requestRenderAll()
       syncSelectedObject(active)
       refreshDesignPreview()
+      recordHistorySnapshot()
       return
     }
 
@@ -602,6 +678,9 @@ export default function useDesignEditor(canvasElement) {
     } else if (property === 'fontSize') {
       const clampedSize = Math.min(300, Math.max(10, number))
       active.set('fontSize', clampedSize)
+    } else if (property === 'opacity') {
+      const clampedOpacity = Math.min(1, Math.max(0.05, number / 100))
+      active.set('opacity', clampedOpacity)
     } else {
       active.set(property, number)
     }
@@ -610,7 +689,8 @@ export default function useDesignEditor(canvasElement) {
     canvas.requestRenderAll()
     syncSelectedObject(active)
     refreshDesignPreview()
-  }, [refreshDesignPreview, refreshLayers, syncSelectedObject])
+    recordHistorySnapshot()
+  }, [recordHistorySnapshot, refreshDesignPreview, refreshLayers, syncSelectedObject])
 
   const setPrintArea = useCallback((printAreaData) => {
     const canvas = canvasRef.current
@@ -911,7 +991,7 @@ export default function useDesignEditor(canvasElement) {
     }
   }, [])
 
-  // Format proyek versi 2 menyimpan canvas depan dan belakang secara terpisah.
+  // Format proyek versi 2 menyimpan canvas depan, belakang, lengan kiri, dan lengan kanan secara terpisah.
   // Gambar diunggah terpisah sebagai file aset agar payload JSON tidak memuat Base64 besar.
   const serializeCanvas = useCallback(async () => {
     const activeSide = activeSideRef.current
@@ -929,10 +1009,20 @@ export default function useDesignEditor(canvasElement) {
       rawSides.back,
       activeSide === 'back'
     )
+    const leftSleevePrepared = await prepareSnapshotForCloud(
+      rawSides.left_sleeve,
+      activeSide === 'left_sleeve'
+    )
+    const rightSleevePrepared = await prepareSnapshotForCloud(
+      rawSides.right_sleeve,
+      activeSide === 'right_sleeve'
+    )
 
     sideSnapshotsRef.current = {
       front: frontPrepared.memorySnapshot,
       back: backPrepared.memorySnapshot,
+      left_sleeve: leftSleevePrepared.memorySnapshot,
+      right_sleeve: rightSleevePrepared.memorySnapshot,
     }
 
     return {
@@ -941,6 +1031,8 @@ export default function useDesignEditor(canvasElement) {
       sides: {
         front: frontPrepared.cloudSnapshot,
         back: backPrepared.cloudSnapshot,
+        left_sleeve: leftSleevePrepared.cloudSnapshot,
+        right_sleeve: rightSleevePrepared.cloudSnapshot,
       },
     }
   }, [prepareSnapshotForCloud, serializeCurrentCanvas])
@@ -958,16 +1050,24 @@ export default function useDesignEditor(canvasElement) {
       throw new Error('Data proyek tidak valid atau kanvas belum siap.')
     }
 
-    const requestedSide = preferredSide === 'back' ? 'back' : 'front'
+    const validSides = ['front', 'back', 'left_sleeve', 'right_sleeve']
+    const requestedSide = validSides.includes(preferredSide) ? preferredSide : 'front'
 
     if (isMultiSideSnapshot) {
       sideSnapshotsRef.current = {
         front: snapshot.sides.front || null,
         back: snapshot.sides.back || null,
+        left_sleeve: snapshot.sides.left_sleeve || null,
+        right_sleeve: snapshot.sides.right_sleeve || null,
       }
       activeSideRef.current = requestedSide
     } else {
-      sideSnapshotsRef.current = { front: null, back: null }
+      sideSnapshotsRef.current = {
+        front: null,
+        back: null,
+        left_sleeve: null,
+        right_sleeve: null,
+      }
       sideSnapshotsRef.current[requestedSide] = snapshot
       activeSideRef.current = requestedSide
     }
@@ -976,7 +1076,8 @@ export default function useDesignEditor(canvasElement) {
   }, [applyCanvasSnapshot])
 
   const switchDesignSide = useCallback(async (nextSide, printAreaData) => {
-    if (nextSide !== 'front' && nextSide !== 'back') {
+    const validSides = ['front', 'back', 'left_sleeve', 'right_sleeve']
+    if (!validSides.includes(nextSide)) {
       throw new Error('Sisi desain tidak dikenal.')
     }
 
@@ -1002,6 +1103,8 @@ export default function useDesignEditor(canvasElement) {
       await applyCanvasSnapshot(sideSnapshotsRef.current[nextSide])
 
       if (printAreaData) setPrintArea(printAreaData)
+      historyRef.current = { past: [], future: [], isRestoring: false }
+      recordHistorySnapshot()
       return true
     } catch (error) {
       // Jika pemuatan sisi tujuan gagal, kembalikan canvas ke sisi sebelumnya.
@@ -1018,19 +1121,67 @@ export default function useDesignEditor(canvasElement) {
     } finally {
       isSwitchingSideRef.current = false
     }
-  }, [applyCanvasSnapshot, serializeCurrentCanvas, setPrintArea])
+  }, [applyCanvasSnapshot, recordHistorySnapshot, serializeCurrentCanvas, setPrintArea])
 
   const resetSideDesigns = useCallback(async (frontPrintArea) => {
-    sideSnapshotsRef.current = { front: null, back: null }
+    sideSnapshotsRef.current = {
+      front: null,
+      back: null,
+      left_sleeve: null,
+      right_sleeve: null,
+    }
     activeSideRef.current = 'front'
-    setSidePreviews({ front: null, back: null })
+    setSidePreviews({
+      front: null,
+      back: null,
+      left_sleeve: null,
+      right_sleeve: null,
+    })
     setDesignPreview(null)
     setAnalysis(null)
     setAnalysisError('')
+    historyRef.current = { past: [], future: [], isRestoring: false }
+    setCanUndo(false)
+    setCanRedo(false)
     await applyCanvasSnapshot(null)
 
     if (frontPrintArea) setPrintArea(frontPrintArea)
-  }, [applyCanvasSnapshot, setPrintArea])
+    recordHistorySnapshot()
+  }, [applyCanvasSnapshot, recordHistorySnapshot, setPrintArea])
+
+  const undo = useCallback(async () => {
+    const past = historyRef.current.past
+    if (past.length <= 1 || historyRef.current.isRestoring) return
+
+    historyRef.current.isRestoring = true
+    try {
+      const current = past.pop()
+      historyRef.current.future.push(current)
+      const previousObjects = JSON.parse(past[past.length - 1] || '[]')
+      await applyCanvasSnapshot({ objects: previousObjects })
+      setCanUndo(past.length > 1)
+      setCanRedo(historyRef.current.future.length > 0)
+    } finally {
+      historyRef.current.isRestoring = false
+    }
+  }, [applyCanvasSnapshot])
+
+  const redo = useCallback(async () => {
+    const future = historyRef.current.future
+    if (future.length === 0 || historyRef.current.isRestoring) return
+
+    historyRef.current.isRestoring = true
+    try {
+      const nextSerialized = future.pop()
+      historyRef.current.past.push(nextSerialized)
+      const nextObjects = JSON.parse(nextSerialized || '[]')
+      await applyCanvasSnapshot({ objects: nextObjects })
+      setCanUndo(historyRef.current.past.length > 1)
+      setCanRedo(future.length > 0)
+    } finally {
+      historyRef.current.isRestoring = false
+    }
+  }, [applyCanvasSnapshot])
 
   const [analysis, setAnalysis] = useState(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
@@ -1448,11 +1599,16 @@ return {
   uploadImage,
   addText,
   deleteSelected,
+  duplicateSelected,
   rotateSelected,
   moveLayer,
   selectLayer,
   updateProperty,
   exportDesign,
   resizeCanvas,
+  undo,
+  redo,
+  canUndo,
+  canRedo,
 }
 }

@@ -136,7 +136,7 @@ export default function PropertiesPanel({ editor }) {
       </label>
 
       <label>
-        Rotasi
+        Rotasi (°)
         <input
           type="number"
           value={selected.angle}
@@ -145,6 +145,58 @@ export default function PropertiesPanel({ editor }) {
           }
         />
       </label>
+
+      <label>
+        Opacity ({selected.opacity ?? 100}%)
+        <input
+          type="range"
+          min="10"
+          max="100"
+          value={selected.opacity ?? 100}
+          onChange={(e) =>
+            editor.updateProperty('opacity', e.target.value)
+          }
+        />
+      </label>
+
+      <div className="properties-quick-actions">
+        <button
+          type="button"
+          onClick={() => editor.duplicateSelected?.()}
+          title="Duplikat objek"
+        >
+          ⧉ Duplikat
+        </button>
+        <button
+          type="button"
+          onClick={() => editor.rotateSelected(90)}
+          title="Putar 90 derajat"
+        >
+          ↻ Putar 90°
+        </button>
+        <button
+          type="button"
+          onClick={() => editor.moveLayer(selected.id, 'up')}
+          title="Bring Forward"
+        >
+          ↑ Maju
+        </button>
+        <button
+          type="button"
+          onClick={() => editor.moveLayer(selected.id, 'down')}
+          title="Send Backward"
+        >
+          ↓ Mundur
+        </button>
+        <button
+          type="button"
+          className="delete-button"
+          onClick={editor.deleteSelected}
+          title="Hapus objek"
+        >
+          ✕ Hapus
+        </button>
+      </div>
     </aside>
   )
 }

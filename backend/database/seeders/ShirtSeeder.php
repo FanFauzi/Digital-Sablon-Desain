@@ -11,54 +11,114 @@ class ShirtSeeder extends Seeder
 {
     public function run(): void
     {
+        $defaultColors = [
+            ['color_name' => 'White', 'color_hex' => '#FFFFFF'],
+            ['color_name' => 'Black', 'color_hex' => '#000000'],
+            ['color_name' => 'Red', 'color_hex' => '#E53E3E'],
+            ['color_name' => 'Blue', 'color_hex' => '#3182CE'],
+            ['color_name' => 'Green', 'color_hex' => '#38A169'],
+            ['color_name' => 'Yellow', 'color_hex' => '#D69E2E'],
+            ['color_name' => 'Grey', 'color_hex' => '#808080'],
+            ['color_name' => 'Navy', 'color_hex' => '#1A365D'],
+        ];
+
         $products = [
             [
                 'name' => 'Basic T-Shirt',
                 'type' => 'tshirt',
-                'description' => 'Kaos basic untuk kebutuhan desain sablon custom.',
-                'variants' => [
-                    ['color_name' => 'Black', 'color_hex' => '#000000'],
-                    ['color_name' => 'White', 'color_hex' => '#FFFFFF'],
-                    ['color_name' => 'Red', 'color_hex' => '#E53E3E'],
-                    ['color_name' => 'Navy', 'color_hex' => '#1A365D'],
-                ],
+                'model_3d_path' => '/models/tshirt-regular.glb',
+                'description' => 'Kaos regular fit berbahan cotton combed untuk kustomisasi sablon depan, belakang, dan lengan.',
+                'variants' => $defaultColors,
                 'areas' => [
                     [
                         'view_side' => 'front',
                         'area_name' => 'Front Print Area',
-                        'width' => 25,
-                        'height' => 30,
+                        'width' => 28,
+                        'height' => 36,
                     ],
                     [
                         'view_side' => 'back',
                         'area_name' => 'Back Print Area',
                         'width' => 30,
                         'height' => 40,
+                    ],
+                    [
+                        'view_side' => 'left_sleeve',
+                        'area_name' => 'Left Sleeve Print Area',
+                        'width' => 10,
+                        'height' => 12,
+                    ],
+                    [
+                        'view_side' => 'right_sleeve',
+                        'area_name' => 'Right Sleeve Print Area',
+                        'width' => 10,
+                        'height' => 12,
+                    ],
+                ],
+            ],
+            [
+                'name' => 'Oversized T-Shirt',
+                'type' => 'tshirt',
+                'model_3d_path' => '/models/tshirt-oversized.glb',
+                'description' => 'Kaos potongan boxy drop-shoulder streetwear dengan area cetak lebih lebar.',
+                'variants' => $defaultColors,
+                'areas' => [
+                    [
+                        'view_side' => 'front',
+                        'area_name' => 'Front Print Area',
+                        'width' => 32,
+                        'height' => 40,
+                    ],
+                    [
+                        'view_side' => 'back',
+                        'area_name' => 'Back Print Area',
+                        'width' => 34,
+                        'height' => 44,
+                    ],
+                    [
+                        'view_side' => 'left_sleeve',
+                        'area_name' => 'Left Sleeve Print Area',
+                        'width' => 12,
+                        'height' => 15,
+                    ],
+                    [
+                        'view_side' => 'right_sleeve',
+                        'area_name' => 'Right Sleeve Print Area',
+                        'width' => 12,
+                        'height' => 15,
                     ],
                 ],
             ],
             [
                 'name' => 'Classic Hoodie',
                 'type' => 'hoodie',
-                'description' => 'Hoodie custom untuk desain sablon bagian depan dan belakang.',
-                'variants' => [
-                    ['color_name' => 'Black', 'color_hex' => '#000000'],
-                    ['color_name' => 'White', 'color_hex' => '#FFFFFF'],
-                    ['color_name' => 'Grey', 'color_hex' => '#808080'],
-                    ['color_name' => 'Navy', 'color_hex' => '#1A365D'],
-                ],
+                'model_3d_path' => '/models/hoodie-classic.glb',
+                'description' => 'Hoodie fleece lengkap dengan tudung 3D, kantong kanguru, serta area cetak dada, punggung, dan lengan.',
+                'variants' => $defaultColors,
                 'areas' => [
                     [
                         'view_side' => 'front',
-                        'area_name' => 'Front Print Area',
-                        'width' => 25,
-                        'height' => 30,
+                        'area_name' => 'Front Chest Print Area',
+                        'width' => 26,
+                        'height' => 26,
                     ],
                     [
                         'view_side' => 'back',
                         'area_name' => 'Back Print Area',
-                        'width' => 30,
-                        'height' => 40,
+                        'width' => 32,
+                        'height' => 42,
+                    ],
+                    [
+                        'view_side' => 'left_sleeve',
+                        'area_name' => 'Left Sleeve Print Area',
+                        'width' => 10,
+                        'height' => 28,
+                    ],
+                    [
+                        'view_side' => 'right_sleeve',
+                        'area_name' => 'Right Sleeve Print Area',
+                        'width' => 10,
+                        'height' => 28,
                     ],
                 ],
             ],
@@ -66,10 +126,11 @@ class ShirtSeeder extends Seeder
 
         foreach ($products as $product) {
             $shirt = Shirt::updateOrCreate(
-                ['type' => $product['type']],
+                ['name' => $product['name']],
                 [
-                    'name' => $product['name'],
+                    'type' => $product['type'],
                     'description' => $product['description'],
+                    'model_3d_path' => $product['model_3d_path'],
                     'is_active' => true,
                 ]
             );

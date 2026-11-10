@@ -1322,3 +1322,784 @@ a {
     font-size: 26px;
   }
 }
+
+/* =========================================================
+   DIGITAL SABLON - 3D T-SHIRT CONFIGURATOR STUDIO STYLES
+   ========================================================= */
+
+.studio-3d-page {
+  max-width: 1760px;
+  margin: 0 auto;
+  padding: 18px 22px 42px;
+}
+
+.studio-topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  background: #ffffff;
+  border: 1px solid #e4e4df;
+  margin-bottom: 12px;
+}
+
+.studio-topbar-brand h1 {
+  margin: 4px 0 0;
+  font-size: 22px;
+  letter-spacing: -0.6px;
+}
+
+.studio-topbar-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.studio-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 9px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.7px;
+  background: #171717;
+  color: #ffffff;
+}
+
+.studio-badge.secondary {
+  background: #f2f2ee;
+  color: #333333;
+  border: 1px solid #dcdcd6;
+}
+
+.studio-workspace-switcher {
+  display: inline-flex;
+  border: 1px solid #d8d8d2;
+  background: #f5f5f1;
+  padding: 3px;
+  gap: 3px;
+}
+
+.studio-workspace-switcher button {
+  padding: 8px 13px;
+  border: none;
+  background: transparent;
+  color: #555;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.studio-workspace-switcher button.active {
+  background: #171717;
+  color: #fff;
+}
+
+.studio-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.studio-project-input {
+  padding: 9px 12px;
+  border: 1px solid #d8d8d2;
+  font-size: 12px;
+  min-width: 175px;
+  background: #fafafa;
+}
+
+.studio-btn-primary,
+.studio-btn-secondary,
+.studio-btn-accent {
+  padding: 9px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid #171717;
+}
+
+.studio-btn-primary {
+  background: #171717;
+  color: #ffffff;
+}
+
+.studio-btn-secondary {
+  background: #ffffff;
+  color: #171717;
+  border-color: #d4d4ce;
+}
+
+.studio-btn-accent {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  color: #ffffff;
+}
+
+/* Main 3-Column Studio Grid */
+.studio-3d-workspace {
+  display: grid;
+  grid-template-columns: 350px minmax(0, 1fr) 320px;
+  gap: 16px;
+  align-items: start;
+  margin-top: 12px;
+}
+
+/* Left Sidebar (Rail + Drawer) */
+.configurator-sidebar {
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr);
+  background: #ffffff;
+  border: 1px solid #e4e4df;
+  min-height: 700px;
+  overflow: hidden;
+}
+
+.configurator-sidebar-rail {
+  display: flex;
+  flex-direction: column;
+  background: #141413;
+  padding: 8px 4px;
+  gap: 4px;
+}
+
+.sidebar-rail-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 11px 4px;
+  border: none;
+  background: transparent;
+  color: #a3a39e;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.sidebar-rail-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.sidebar-rail-btn.active {
+  background: #ffffff;
+  color: #141413;
+  font-weight: 800;
+}
+
+.sidebar-rail-icon {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.sidebar-rail-label {
+  font-size: 9px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.configurator-sidebar-drawer {
+  padding: 16px;
+  max-height: 780px;
+  overflow-y: auto;
+}
+
+.sidebar-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sidebar-section-header h3 {
+  margin: 4px 0 0;
+  font-size: 16px;
+  letter-spacing: -0.4px;
+}
+
+.sidebar-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #efefe9;
+}
+
+.sidebar-label {
+  font-size: 11px;
+  font-weight: 800;
+  color: #222;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.sidebar-hint {
+  margin: 0;
+  font-size: 11px;
+  color: #666;
+  line-height: 1.45;
+}
+
+.sidebar-row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sidebar-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  background: #f3f3ee;
+  border: 1px solid #dfdfd8;
+}
+
+.garment-model-grid,
+.motion-mode-grid,
+.placement-preset-grid,
+.fabric-texture-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.garment-model-card,
+.motion-mode-card,
+.placement-preset-btn,
+.fabric-texture-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid #dfdfd9;
+  background: #fafaf7;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.garment-model-card.active,
+.motion-mode-card.active,
+.fabric-texture-btn.active {
+  border-color: #171717;
+  background: #171717;
+  color: #ffffff;
+}
+
+.garment-model-card strong,
+.motion-mode-card strong,
+.placement-preset-btn strong,
+.fabric-texture-btn strong {
+  font-size: 12px;
+}
+
+.garment-model-card span,
+.garment-model-card small,
+.motion-mode-card span,
+.placement-preset-btn span,
+.fabric-texture-btn span {
+  font-size: 10px;
+  opacity: 0.8;
+}
+
+.upload-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 18px 12px;
+  border: 1.5px dashed #b9b9b0;
+  background: #fafaf7;
+  text-align: center;
+}
+
+.upload-dropzone.dragging {
+  border-color: #1d4ed8;
+  background: #eff6ff;
+}
+
+.upload-dropzone-icon {
+  font-size: 20px;
+}
+
+.upload-dropzone strong {
+  font-size: 11px;
+}
+
+.upload-dropzone span {
+  font-size: 10px;
+  color: #666;
+}
+
+.upload-browse-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 4px;
+  padding: 8px 12px;
+  background: #171717;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.side-selector-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.side-selector-btn {
+  padding: 9px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid #dcdcd5;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.side-selector-btn.active {
+  background: #171717;
+  color: #ffffff;
+  border-color: #171717;
+}
+
+.sidebar-info-pill {
+  padding: 7px 10px;
+  font-size: 11px;
+  background: #f4f4ef;
+  border: 1px solid #e2e2dc;
+}
+
+.color-swatch-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.color-swatch-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 1px solid #dfdfd8;
+  background: #ffffff;
+  cursor: pointer;
+  text-align: left;
+}
+
+.color-swatch-item.active {
+  border-color: #171717;
+  background: #f3f3ee;
+  font-weight: 700;
+}
+
+.color-swatch-circle {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  flex-shrink: 0;
+}
+
+.color-swatch-name {
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.custom-hex-form {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.custom-hex-form input[type="color"] {
+  width: 36px;
+  height: 34px;
+  padding: 2px;
+  border: 1px solid #d5d5ce;
+  background: #fff;
+}
+
+.custom-hex-form input[type="text"] {
+  flex: 1;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid #d5d5ce;
+  font-size: 12px;
+}
+
+.custom-hex-form button {
+  padding: 8px 10px;
+  background: #171717;
+  color: #fff;
+  border: none;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.bg-preset-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bg-preset-btn {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border: 1px solid #dfdfd8;
+  background: #ffffff;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.bg-preset-btn.active {
+  border-color: #171717;
+  font-weight: 700;
+  background: #f3f3ee;
+}
+
+.bg-preset-swatch {
+  width: 20px;
+  height: 20px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  flex-shrink: 0;
+}
+
+.bg-preset-swatch.checkerboard,
+.shirt-3d-stage.checkerboard-bg {
+  background-image:
+    linear-gradient(45deg, #e2e8f0 25%, transparent 25%),
+    linear-gradient(-45deg, #e2e8f0 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #e2e8f0 75%),
+    linear-gradient(-45deg, transparent 75%, #e2e8f0 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+}
+
+.effect-card {
+  padding: 10px;
+  background: #fafaf7;
+  border: 1px solid #e6e6e0;
+}
+
+.effect-sliders {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.effect-sliders label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: #444;
+}
+
+.checkbox-inline {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+}
+
+.sidebar-action-btn,
+.sidebar-ai-btn,
+.sidebar-reset-btn {
+  padding: 9px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid #171717;
+}
+
+.sidebar-action-btn {
+  background: #171717;
+  color: #ffffff;
+}
+
+.sidebar-action-btn.active {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+.sidebar-ai-btn {
+  background: #1e293b;
+  border-color: #1e293b;
+  color: #ffffff;
+}
+
+.sidebar-reset-btn {
+  background: #ffffff;
+  color: #444;
+  border-color: #d4d4ce;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.sidebar-button-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.export-button-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.sidebar-export-status {
+  margin: 6px 0 0;
+  padding: 8px;
+  background: #eff6ff;
+  color: #1e40af;
+  font-size: 11px;
+}
+
+/* Center Stage (Split 3D + 2D / Full 3D / Full 2D) */
+.studio-center-stage {
+  display: grid;
+  gap: 16px;
+}
+
+.studio-center-stage.mode-split {
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.95fr);
+}
+
+.studio-center-stage.mode-3d,
+.studio-center-stage.mode-2d {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.studio-3d-pane,
+.studio-2d-pane {
+  background: #ffffff;
+  border: 1px solid #e4e4df;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.studio-2d-pane-hidden {
+  position: fixed;
+  left: -9999px;
+  top: 0;
+  width: 420px;
+  height: 500px;
+  opacity: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.studio-pane-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.studio-pane-header h2 {
+  margin: 3px 0 0;
+  font-size: 16px;
+  letter-spacing: -0.3px;
+}
+
+.studio-side-pills {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.studio-side-pills button {
+  padding: 6px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  border: 1px solid #dcdcd5;
+  background: #fafaf7;
+  cursor: pointer;
+}
+
+.studio-side-pills button.active {
+  background: #171717;
+  color: #ffffff;
+  border-color: #171717;
+}
+
+.studio-print-spec {
+  font-size: 11px;
+  font-weight: 700;
+  color: #555;
+  background: #f5f5f0;
+  padding: 5px 9px;
+  border: 1px solid #e2e2dc;
+}
+
+/* 3D Viewer Stage & Camera HUD */
+.shirt-3d-stage {
+  position: relative;
+  width: 100%;
+  height: 540px;
+  border: 1px solid #e2e2dc;
+  overflow: hidden;
+}
+
+.studio-center-stage.mode-3d .shirt-3d-stage {
+  height: 650px;
+}
+
+.shirt-3d-hud-top {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.shirt-3d-badge {
+  padding: 4px 9px;
+  background: rgba(20, 20, 19, 0.78);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  backdrop-filter: blur(4px);
+}
+
+.shirt-3d-badge.accent {
+  background: rgba(29, 78, 216, 0.88);
+}
+
+.shirt-3d-camera-bar {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  right: 12px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.camera-view-pills,
+.camera-zoom-controls {
+  display: inline-flex;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.92);
+  padding: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  backdrop-filter: blur(6px);
+  flex-wrap: wrap;
+}
+
+.camera-view-pills button,
+.camera-zoom-controls button {
+  padding: 6px 9px;
+  border: none;
+  background: transparent;
+  color: #222;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.camera-view-pills button.active,
+.camera-zoom-controls button.active {
+  background: #171717;
+  color: #ffffff;
+}
+
+/* Right Inspector Column */
+.studio-right-inspector {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: 820px;
+  overflow-y: auto;
+}
+
+.properties-quick-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.properties-quick-actions button {
+  padding: 7px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid #d5d5ce;
+  background: #fafaf7;
+  cursor: pointer;
+}
+
+.properties-quick-actions .delete-button {
+  grid-column: span 2;
+  background: #fef2f2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.saved-project-compact-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+@media (max-width: 1380px) {
+  .studio-3d-workspace {
+    grid-template-columns: 320px minmax(0, 1fr);
+  }
+
+  .studio-right-inspector {
+    grid-column: span 2;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    max-height: none;
+  }
+}
+
+@media (max-width: 1024px) {
+  .studio-3d-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .studio-right-inspector {
+    grid-column: span 1;
+  }
+
+  .studio-center-stage.mode-split {
+    grid-template-columns: 1fr;
+  }
+
+  .configurator-sidebar {
+    min-height: auto;
+  }
+}

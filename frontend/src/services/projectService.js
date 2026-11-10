@@ -17,6 +17,7 @@ function normalizeCloudProject(project) {
     selectedColor: config.selected_color || '#ffffff',
     selectedSize: config.selected_size || 'M',
     selectedSide: config.selected_side || 'front',
+    canvasConfig: config,
     updatedAt: project.updated_at,
     canvasState: null,
   }

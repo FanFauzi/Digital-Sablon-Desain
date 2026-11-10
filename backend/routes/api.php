@@ -47,5 +47,17 @@ Route::prefix('v1')->group(function () {
             ->whereNumber('project');
         Route::post('/projects/{project}/exports', [ProjectController::class, 'recordExport'])
             ->whereNumber('project');
+
+        // Alias endpoint spesifikasi 3D Configurator (/api/v1/design-projects)
+        Route::get('/design-projects', [ProjectController::class, 'index']);
+        Route::get('/design-projects/{project}', [ProjectController::class, 'show'])->whereNumber('project');
+        Route::post('/design-projects', [ProjectController::class, 'store']);
+        Route::put('/design-projects/{project}', [ProjectController::class, 'update'])
+            ->whereNumber('project');
+        Route::delete('/design-projects/{project}', [ProjectController::class, 'destroy'])
+            ->whereNumber('project');
+        Route::post('/design-projects/{project}/assets', [UploadedAssetController::class, 'store']);
+        Route::post('/design-projects/{project}/preview', [ProjectController::class, 'recordExport'])
+            ->whereNumber('project');
     });
 });

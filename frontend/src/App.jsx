@@ -27,6 +27,18 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/configurator/:shirtId"
+            element={
+              <ProtectedRoute>
+                <EditorPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/configurator"
+            element={<Navigate to="/configurator/1" replace />}
+          />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

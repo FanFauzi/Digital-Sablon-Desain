@@ -165,13 +165,20 @@ class ProjectController extends Controller
             'canvas_config.shirt_name' => ['nullable', 'string', 'max:255'],
             'canvas_config.selected_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'canvas_config.selected_size' => ['nullable', 'string', 'max:10'],
-            'canvas_config.selected_side' => ['required', 'in:front,back'],
+            'canvas_config.selected_side' => ['required', 'in:front,back,left_sleeve,right_sleeve'],
+            'canvas_config.garment_style' => ['nullable', 'string', 'max:40'],
+            'canvas_config.background' => ['nullable', 'array'],
+            'canvas_config.material_effects' => ['nullable', 'array'],
+            'canvas_config.motion' => ['nullable', 'array'],
+            'canvas_config.camera' => ['nullable', 'array'],
             'editor_state' => ['required', 'array'],
             'editor_state.schemaVersion' => ['nullable', 'integer', 'in:2'],
-            'editor_state.activeSide' => ['nullable', 'in:front,back'],
+            'editor_state.activeSide' => ['nullable', 'in:front,back,left_sleeve,right_sleeve'],
             'editor_state.sides' => ['sometimes', 'array'],
             'editor_state.sides.front' => ['sometimes', 'nullable', 'array'],
             'editor_state.sides.back' => ['sometimes', 'nullable', 'array'],
+            'editor_state.sides.left_sleeve' => ['sometimes', 'nullable', 'array'],
+            'editor_state.sides.right_sleeve' => ['sometimes', 'nullable', 'array'],
             'editor_state.objects' => ['sometimes', 'array'],
         ]);
 
@@ -202,7 +209,7 @@ class ProjectController extends Controller
     private function normalizeEditorStateAssets(User $user, array $editorState): array
     {
         if (isset($editorState['sides']) && is_array($editorState['sides'])) {
-            foreach (['front', 'back'] as $side) {
+            foreach (['front', 'back', 'left_sleeve', 'right_sleeve'] as $side) {
                 if (isset($editorState['sides'][$side]) && is_array($editorState['sides'][$side])) {
                     $editorState['sides'][$side] = $this->normalizeCanvasSnapshot(
                         $user,
@@ -308,7 +315,7 @@ class ProjectController extends Controller
         $sideGroups = [];
 
         if (isset($editorState['sides']) && is_array($editorState['sides'])) {
-            foreach (['front', 'back'] as $side) {
+            foreach (['front', 'back', 'left_sleeve', 'right_sleeve'] as $side) {
                 $objects = $editorState['sides'][$side]['objects'] ?? [];
                 if (is_array($objects)) {
                     $sideGroups[$side] = $objects;
