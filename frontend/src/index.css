@@ -1956,6 +1956,12 @@ a {
 }
 
 /* 3D Viewer Stage & Camera HUD */
+.studio-3d-pane .shirt-preview-canvas {
+  height: auto;
+  margin-top: 0;
+  background: transparent;
+}
+
 .shirt-3d-stage {
   position: relative;
   width: 100%;

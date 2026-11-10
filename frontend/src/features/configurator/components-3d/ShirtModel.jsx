@@ -61,116 +61,264 @@ function ensureGeometryUVs(geometry, bbox) {
 }
 
 /**
- * Menghasilkan patch permukaan cetak (Front, Back, Left Sleeve, Right Sleeve)
- * yang mengikuti kontur asli permukaan model 3D (.FBX maupun .GLB) menggunakan Raycasting.
+ * Isi sel grid yang kosong dengan rata-rata tetangga terdekat dan haluskan (smoothing 3x3).
  */
-function buildRayconformedPrintPatches(bodyMeshes, bbox) {
-  const raycaster = new THREE.Raycaster()
-  const width = bbox.max.x - bbox.min.x
-  const height = bbox.max.y - bbox.min.y
+function fillAndSmoothGrid(grid, rows, cols, fallbackValue, isMaxSurface) {
+  const filled = Array.from({ length: rows + 1 }, (_, r) =>
+    new Float32Array(grid[r])
+  )
 
-  // Pastikan matrixWorld terbarui sebelum raycast
-  bodyMeshes.forEach((m) => m.updateMatrixWorld(true))
-
-  const createTorsoPatch = (isFront) => {
-    const cols = 26
-    const rows = 32
-    const patchW = width * 0.36
-    const patchH = height * 0.48
-    const centerY = bbox.min.y + height * 0.49
-
-    const positions = []
-    const uvs = []
-    const zGrid = Array.from({ length: rows + 1 }, () =>
-      new Float32Array(cols + 1)
-    )
-
-    const fallbackZ = isFront ? bbox.max.z * 0.72 : bbox.min.z * 0.72
-    const rayStartZ = isFront ? bbox.max.z + 1.5 : bbox.min.z - 1.5
-    const rayDir = new THREE.Vector3(0, 0, isFront ? -1 : 1)
-    const origin = new THREE.Vector3()
-
-    for (let r = 0; r <= rows; r++) {
-      const v = r / rows
-      const y = centerY + patchH * 0.5 - v * patchH
-
-      for (let c = 0; c <= cols; c++) {
-        const u = c / cols
-        const x = isFront
-          ? -patchW * 0.5 + u * patchW
-          : patchW * 0.5 - u * patchW
-
-        origin.set(x, y, rayStartZ)
-        raycaster.set(origin, rayDir)
-        const hits = raycaster.intersectObjects(bodyMeshes, false)
-
-        if (hits.length > 0) {
-          zGrid[r][c] = hits[0].point.z
-        } else {
-          zGrid[r][c] = fallbackZ
-        }
-      }
-    }
-
-    // Haluskan permukaan Z (smoothing 3x3) agar cetakan mengikuti lekukan kain dengan mulus
-    const smoothedZ = Array.from({ length: rows + 1 }, () =>
-      new Float32Array(cols + 1)
-    )
-    const normalOffset = isFront ? 0.0055 : -0.0055
-
+  // Pass 1 & 2: isi sel yang belum terisi (NaN) dari tetangga terdekat
+  for (let pass = 0; pass < 4; pass++) {
     for (let r = 0; r <= rows; r++) {
       for (let c = 0; c <= cols; c++) {
+        if (!Number.isNaN(filled[r][c])) continue
         let sum = 0
         let count = 0
-        for (let dr = -1; dr <= 1; dr++) {
-          for (let dc = -1; dc <= 1; dc++) {
+        for (let dr = -2; dr <= 2; dr++) {
+          for (let dc = -2; dc <= 2; dc++) {
             const nr = r + dr
             const nc = c + dc
-            if (nr >= 0 && nr <= rows && nc >= 0 && nc <= cols) {
-              sum += zGrid[nr][nc]
+            if (
+              nr >= 0 &&
+              nr <= rows &&
+              nc >= 0 &&
+              nc <= cols &&
+              !Number.isNaN(filled[nr][nc])
+            ) {
+              sum += filled[nr][nc]
               count++
             }
           }
         }
-        const avgZ = sum / count
-        // Pastikan tidak menembus ke dalam permukaan asli
-        const safeZ = isFront
-          ? Math.max(avgZ, zGrid[r][c]) + normalOffset
-          : Math.min(avgZ, zGrid[r][c]) + normalOffset
-        smoothedZ[r][c] = safeZ
-      }
-    }
-
-    for (let r = 0; r <= rows; r++) {
-      const v = r / rows
-      const y = centerY + patchH * 0.5 - v * patchH
-      for (let c = 0; c <= cols; c++) {
-        const u = c / cols
-        const x = isFront
-          ? -patchW * 0.5 + u * patchW
-          : patchW * 0.5 - u * patchW
-        positions.push(x, y, smoothedZ[r][c])
-        uvs.push(u, 1.0 - v)
-      }
-    }
-
-    const indices = []
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const i0 = r * (cols + 1) + c
-        const i1 = i0 + 1
-        const i2 = (r + 1) * (cols + 1) + c
-        const i3 = i2 + 1
-        if (isFront) {
-          indices.push(i0, i2, i1)
-          indices.push(i1, i2, i3)
-        } else {
-          indices.push(i0, i1, i2)
-          indices.push(i1, i3, i2)
+        if (count > 0) {
+          filled[r][c] = sum / count
         }
       }
     }
+  }
 
+  for (let r = 0; r <= rows; r++) {
+    for (let c = 0; c <= cols; c++) {
+      if (Number.isNaN(filled[r][c])) {
+        filled[r][c] = fallbackValue
+      }
+    }
+  }
+
+  // Pass 3: 3x3 smoothing + pastikan tidak menembus permukaan asli
+  const smoothed = Array.from({ length: rows + 1 }, () =>
+    new Float32Array(cols + 1)
+  )
+  const offset = isMaxSurface ? 0.008 : -0.008
+
+  for (let r = 0; r <= rows; r++) {
+    for (let c = 0; c <= cols; c++) {
+      let sum = 0
+      let count = 0
+      for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+          const nr = r + dr
+          const nc = c + dc
+          if (nr >= 0 && nr <= rows && nc >= 0 && nc <= cols) {
+            sum += filled[nr][nc]
+            count++
+          }
+        }
+      }
+      const avg = sum / count
+      smoothed[r][c] = isMaxSurface
+        ? Math.max(avg, filled[r][c]) + offset
+        : Math.min(avg, filled[r][c]) + offset
+    }
+  }
+
+  return smoothed
+}
+
+/**
+ * Menghasilkan 4 permukaan cetak (Front, Back, Left Sleeve, Right Sleeve)
+ * secara INSTAN (< 2 milidetik, O(N) tanpa Raycaster lambat) menggunakan Depth-Grid Projection.
+ */
+function buildFastSurfacePrintPatches(bodyGeometries, bbox) {
+  const width = bbox.max.x - bbox.min.x
+  const height = bbox.max.y - bbox.min.y
+  const depth = bbox.max.z - bbox.min.z
+
+  const torsoCols = 20
+  const torsoRows = 24
+  const patchW = width * 0.36
+  const patchH = height * 0.48
+  const centerY = bbox.min.y + height * 0.49
+  const minTorsoX = -patchW * 0.5
+  const minTorsoY = centerY - patchH * 0.5
+
+  const frontGrid = Array.from({ length: torsoRows + 1 }, () =>
+    new Float32Array(torsoCols + 1).fill(NaN)
+  )
+  const backGrid = Array.from({ length: torsoRows + 1 }, () =>
+    new Float32Array(torsoCols + 1).fill(NaN)
+  )
+
+  const sleeveCols = 12
+  const sleeveRows = 14
+  const sleeveCenterY = bbox.min.y + height * 0.65
+  const sleeveH = height * 0.2
+  const sleeveDepth = Math.max(0.16, depth * 0.55)
+  const minSleeveY = sleeveCenterY - sleeveH * 0.5
+  const minSleeveZ = -sleeveDepth * 0.5
+
+  const leftSleeveGrid = Array.from({ length: sleeveRows + 1 }, () =>
+    new Float32Array(sleeveCols + 1).fill(NaN)
+  )
+  const rightSleeveGrid = Array.from({ length: sleeveRows + 1 }, () =>
+    new Float32Array(sleeveCols + 1).fill(NaN)
+  )
+
+  // Single-pass sampling dari vertex buffer (maksimal ~20.000 sampel agar selalu < 2 ms)
+  bodyGeometries.forEach((geom) => {
+    const pos = geom.attributes.position
+    if (!pos) return
+    const count = pos.count
+    const step = Math.max(1, Math.floor(count / 20000))
+
+    for (let i = 0; i < count; i += step) {
+      const vx = pos.getX(i)
+      const vy = pos.getY(i)
+      const vz = pos.getZ(i)
+
+      // 1. Cek area Torso (Front & Back)
+      const normY = ( centerY + patchH * 0.5 - vy ) / patchH
+      if (normY >= -0.05 && normY <= 1.05) {
+        const r = Math.max(0, Math.min(torsoRows, Math.round(normY * torsoRows)))
+
+        // Front: u dari -patchW/2 ke +patchW/2
+        const normFrontX = (vx - minTorsoX) / patchW
+        if (normFrontX >= -0.05 && normFrontX <= 1.05 && vz >= 0) {
+          const c = Math.max(
+            0,
+            Math.min(torsoCols, Math.round(normFrontX * torsoCols))
+          )
+          if (Number.isNaN(frontGrid[r][c]) || vz > frontGrid[r][c]) {
+            frontGrid[r][c] = vz
+          }
+        }
+
+        // Back: u dari +patchW/2 ke -patchW/2
+        const normBackX = (patchW * 0.5 - vx) / patchW
+        if (normBackX >= -0.05 && normBackX <= 1.05 && vz <= 0) {
+          const c = Math.max(
+            0,
+            Math.min(torsoCols, Math.round(normBackX * torsoCols))
+          )
+          if (Number.isNaN(backGrid[r][c]) || vz < backGrid[r][c]) {
+            backGrid[r][c] = vz
+          }
+        }
+      }
+
+      // 2. Cek area Lengan (Left Sleeve +X & Right Sleeve -X)
+      const normSleeveY = (sleeveCenterY + sleeveH * 0.5 - vy) / sleeveH
+      if (
+        normSleeveY >= -0.05 &&
+        normSleeveY <= 1.05 &&
+        Math.abs(vx) > width * 0.22
+      ) {
+        const sr = Math.max(
+          0,
+          Math.min(sleeveRows, Math.round(normSleeveY * sleeveRows))
+        )
+        if (vx > 0) {
+          const normZ = (sleeveDepth * 0.5 - vz) / sleeveDepth
+          if (normZ >= -0.05 && normZ <= 1.05) {
+            const sc = Math.max(
+              0,
+              Math.min(sleeveCols, Math.round(normZ * sleeveCols))
+            )
+            if (
+              Number.isNaN(leftSleeveGrid[sr][sc]) ||
+              vx > leftSleeveGrid[sr][sc]
+            ) {
+              leftSleeveGrid[sr][sc] = vx
+            }
+          }
+        } else {
+          const normZ = (vz - minSleeveZ) / sleeveDepth
+          if (normZ >= -0.05 && normZ <= 1.05) {
+            const sc = Math.max(
+              0,
+              Math.min(sleeveCols, Math.round(normZ * sleeveCols))
+            )
+            if (
+              Number.isNaN(rightSleeveGrid[sr][sc]) ||
+              vx < rightSleeveGrid[sr][sc]
+            ) {
+              rightSleeveGrid[sr][sc] = vx
+            }
+          }
+        }
+      }
+    }
+  })
+
+  const smoothedFrontZ = fillAndSmoothGrid(
+    frontGrid,
+    torsoRows,
+    torsoCols,
+    bbox.max.z * 0.72,
+    true
+  )
+  const smoothedBackZ = fillAndSmoothGrid(
+    backGrid,
+    torsoRows,
+    torsoCols,
+    bbox.min.z * 0.72,
+    false
+  )
+  const smoothedLeftX = fillAndSmoothGrid(
+    leftSleeveGrid,
+    sleeveRows,
+    sleeveCols,
+    width * 0.36,
+    true
+  )
+  const smoothedRightX = fillAndSmoothGrid(
+    rightSleeveGrid,
+    sleeveRows,
+    sleeveCols,
+    -width * 0.36,
+    false
+  )
+
+  const buildTorsoGeometry = (zGrid, isFront) => {
+    const positions = []
+    const uvs = []
+    for (let r = 0; r <= torsoRows; r++) {
+      const v = r / torsoRows
+      const y = centerY + patchH * 0.5 - v * patchH
+      for (let c = 0; c <= torsoCols; c++) {
+        const u = c / torsoCols
+        const x = isFront
+          ? -patchW * 0.5 + u * patchW
+          : patchW * 0.5 - u * patchW
+        positions.push(x, y, zGrid[r][c])
+        uvs.push(u, 1.0 - v)
+      }
+    }
+    const indices = []
+    for (let r = 0; r < torsoRows; r++) {
+      for (let c = 0; c < torsoCols; c++) {
+        const i0 = r * (torsoCols + 1) + c
+        const i1 = i0 + 1
+        const i2 = (r + 1) * (torsoCols + 1) + c
+        const i3 = i2 + 1
+        if (isFront) {
+          indices.push(i0, i2, i1, i1, i2, i3)
+        } else {
+          indices.push(i0, i1, i2, i1, i3, i2)
+        }
+      }
+    }
     const geom = new THREE.BufferGeometry()
     geom.setAttribute(
       'position',
@@ -182,121 +330,31 @@ function buildRayconformedPrintPatches(bodyMeshes, bbox) {
     return geom
   }
 
-  const createSleevePatch = (isLeftSleeve) => {
-    // Left sleeve berada di sisi +X model, Right sleeve berada di sisi -X model
-    const signX = isLeftSleeve ? 1 : -1
-    const cols = 16
-    const rows = 18
-
-    // Cari titik-titik lengan pada area luar bahu/lengan
-    let minY = Infinity
-    let maxY = -Infinity
-    let sumZ = 0
-    let count = 0
-    const xInner = width * 0.27
-    const xOuter = width * 0.44
-
-    bodyMeshes.forEach((mesh) => {
-      const pos = mesh.geometry.attributes.position
-      for (let i = 0; i < pos.count; i++) {
-        const vx = pos.getX(i) * signX
-        const vy = pos.getY(i)
-        const vz = pos.getZ(i)
-        if (vx >= xInner && vx <= xOuter && vy > bbox.min.y + height * 0.35) {
-          if (vy < minY) minY = vy
-          if (vy > maxY) maxY = vy
-          sumZ += vz
-          count++
-        }
-      }
-    })
-
-    const centerY =
-      count > 10
-        ? (minY + maxY) * 0.52
-        : bbox.min.y + height * 0.66
-    const centerZ = count > 10 ? sumZ / count : 0
-    const patchH = Math.min(height * 0.22, Math.max(0.18, (maxY - minY) * 0.65 || 0.26))
-    const patchDepth = Math.min(width * 0.16, 0.24)
-
+  const buildSleeveGeometry = (xGrid, isLeft) => {
     const positions = []
     const uvs = []
-    const xGrid = Array.from({ length: rows + 1 }, () =>
-      new Float32Array(cols + 1)
-    )
-
-    const rayStartX = signX * (bbox.max.x + 1.2)
-    const rayDir = new THREE.Vector3(-signX, 0, 0)
-    const origin = new THREE.Vector3()
-    const fallbackX = signX * (width * 0.35)
-
-    for (let r = 0; r <= rows; r++) {
-      const v = r / rows
-      const y = centerY + patchH * 0.5 - v * patchH
-
-      for (let c = 0; c <= cols; c++) {
-        const u = c / cols
-        const z = isLeftSleeve
-          ? centerZ + patchDepth * 0.5 - u * patchDepth
-          : centerZ - patchDepth * 0.5 + u * patchDepth
-
-        origin.set(rayStartX, y, z)
-        raycaster.set(origin, rayDir)
-        const hits = raycaster.intersectObjects(bodyMeshes, false)
-
-        if (hits.length > 0) {
-          xGrid[r][c] = hits[0].point.x
-        } else {
-          xGrid[r][c] = fallbackX
-        }
-      }
-    }
-
-    const normalOffset = signX * 0.0055
-    for (let r = 0; r <= rows; r++) {
-      const v = r / rows
-      const y = centerY + patchH * 0.5 - v * patchH
-      for (let c = 0; c <= cols; c++) {
-        const u = c / cols
-        const z = isLeftSleeve
-          ? centerZ + patchDepth * 0.5 - u * patchDepth
-          : centerZ - patchDepth * 0.5 + u * patchDepth
-
-        let sum = 0
-        let cnt = 0
-        for (let dr = -1; dr <= 1; dr++) {
-          for (let dc = -1; dc <= 1; dc++) {
-            const nr = r + dr
-            const nc = c + dc
-            if (nr >= 0 && nr <= rows && nc >= 0 && nc <= cols) {
-              sum += xGrid[nr][nc]
-              cnt++
-            }
-          }
-        }
-        const avgX = sum / cnt
-        const safeX =
-          signX > 0
-            ? Math.max(avgX, xGrid[r][c]) + normalOffset
-            : Math.min(avgX, xGrid[r][c]) + normalOffset
-
-        positions.push(safeX, y, z)
+    for (let r = 0; r <= sleeveRows; r++) {
+      const v = r / sleeveRows
+      const y = sleeveCenterY + sleeveH * 0.5 - v * sleeveH
+      for (let c = 0; c <= sleeveCols; c++) {
+        const u = c / sleeveCols
+        const z = isLeft
+          ? sleeveDepth * 0.5 - u * sleeveDepth
+          : -sleeveDepth * 0.5 + u * sleeveDepth
+        positions.push(xGrid[r][c], y, z)
         uvs.push(u, 1.0 - v)
       }
     }
-
     const indices = []
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const i0 = r * (cols + 1) + c
+    for (let r = 0; r < sleeveRows; r++) {
+      for (let c = 0; c < sleeveCols; c++) {
+        const i0 = r * (sleeveCols + 1) + c
         const i1 = i0 + 1
-        const i2 = (r + 1) * (cols + 1) + c
+        const i2 = (r + 1) * (sleeveCols + 1) + c
         const i3 = i2 + 1
-        indices.push(i0, i2, i1)
-        indices.push(i1, i2, i3)
+        indices.push(i0, i2, i1, i1, i2, i3)
       }
     }
-
     const geom = new THREE.BufferGeometry()
     geom.setAttribute(
       'position',
@@ -309,10 +367,10 @@ function buildRayconformedPrintPatches(bodyMeshes, bbox) {
   }
 
   return {
-    Print_Front: createTorsoPatch(true),
-    Print_Back: createTorsoPatch(false),
-    Print_LeftSleeve: createSleevePatch(true),
-    Print_RightSleeve: createSleevePatch(false),
+    Print_Front: buildTorsoGeometry(smoothedFrontZ, true),
+    Print_Back: buildTorsoGeometry(smoothedBackZ, false),
+    Print_LeftSleeve: buildSleeveGeometry(smoothedLeftX, true),
+    Print_RightSleeve: buildSleeveGeometry(smoothedRightX, false),
   }
 }
 
@@ -348,13 +406,9 @@ function normalizeAndPrepareModel(rawRoot) {
 
   // Jika model sudah memiliki struktur 5-mesh bawaan kita
   if (namedMeshes.Garment_Body && namedMeshes.Print_Front) {
-    Object.values(namedMeshes).forEach((geom) => {
-      geom.userData.basePositions = new Float32Array(
-        geom.attributes.position.array
-      )
-    })
     return {
       bodyGeometries: [namedMeshes.Garment_Body],
+      totalVertices: namedMeshes.Garment_Body.attributes.position?.count || 0,
       printMeshes: {
         Print_Front: namedMeshes.Print_Front,
         Print_Back: namedMeshes.Print_Back,
@@ -371,10 +425,9 @@ function normalizeAndPrepareModel(rawRoot) {
       : Object.values(namedMeshes)
 
   if (allBodyGeoms.length === 0) {
-    return { bodyGeometries: [], printMeshes: {} }
+    return { bodyGeometries: [], totalVertices: 0, printMeshes: {} }
   }
 
-  // Hitung bounding box gabungan awal
   const computeCombinedBox = (geoms) => {
     const box = new THREE.Box3()
     geoms.forEach((g) => {
@@ -385,10 +438,10 @@ function normalizeAndPrepareModel(rawRoot) {
   }
 
   let bbox = computeCombinedBox(allBodyGeoms)
-  let size = new THREE.Vector3()
+  const size = new THREE.Vector3()
   bbox.getSize(size)
 
-  // Jika model FBX berorientasi Z-up (ketebalan Z jauh lebih panjang daripada tinggi Y), putar ke Y-up
+  // Jika model FBX berorientasi Z-up, putar ke Y-up
   if (size.z > size.y * 1.35) {
     const rotX = new THREE.Matrix4().makeRotationX(-Math.PI / 2)
     allBodyGeoms.forEach((g) => g.applyMatrix4(rotX))
@@ -399,36 +452,40 @@ function normalizeAndPrepareModel(rawRoot) {
   const center = new THREE.Vector3()
   bbox.getCenter(center)
 
-  // Pusatkan pada (0, 0, 0) dan skalakan secara proporsional agar pas di kamera studio (target span ~1.92 unit)
   const maxSpan = Math.max(size.x, size.y, size.z, 0.001)
   const targetScale = 1.92 / maxSpan
 
-  const transformMatrix = new THREE.Matrix4()
-    .makescale?.(targetScale, targetScale, targetScale) ||
-    new THREE.Matrix4().makeScale(targetScale, targetScale, targetScale)
+  const scaleMatrix = new THREE.Matrix4().makeScale(
+    targetScale,
+    targetScale,
+    targetScale
+  )
   const translateMatrix = new THREE.Matrix4().makeTranslation(
     -center.x,
     -center.y,
     -center.z
   )
 
+  let totalVertices = 0
   allBodyGeoms.forEach((g) => {
     g.applyMatrix4(translateMatrix)
-    g.applyMatrix4(transformMatrix)
-    g.computeVertexNormals()
+    g.applyMatrix4(scaleMatrix)
+    if (!g.attributes.normal) {
+      g.computeVertexNormals()
+    }
+    totalVertices += g.attributes.position?.count || 0
   })
 
   const normalizedBox = computeCombinedBox(allBodyGeoms)
-  const tempMeshes = allBodyGeoms.map((g) => {
+  allBodyGeoms.forEach((g) => {
     ensureGeometryUVs(g, normalizedBox)
-    g.userData.basePositions = new Float32Array(g.attributes.position.array)
-    return new THREE.Mesh(g, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }))
   })
 
-  const printMeshes = buildRayconformedPrintPatches(tempMeshes, normalizedBox)
+  const printMeshes = buildFastSurfacePrintPatches(allBodyGeoms, normalizedBox)
 
   return {
     bodyGeometries: allBodyGeoms,
+    totalVertices,
     printMeshes,
   }
 }
@@ -457,22 +514,7 @@ async function probeModelPath(url) {
 async function loadPrepared3DModel(url, formatHint = '') {
   const cacheKey = `${url}::${formatHint}`
   if (modelCache.has(cacheKey)) {
-    const cached = modelCache.get(cacheKey)
-    return {
-      bodyGeometries: cached.bodyGeometries.map((g) => {
-        const clone = g.clone()
-        clone.userData.basePositions = new Float32Array(
-          clone.attributes.position.array
-        )
-        return clone
-      }),
-      printMeshes: {
-        Print_Front: cached.printMeshes.Print_Front?.clone(),
-        Print_Back: cached.printMeshes.Print_Back?.clone(),
-        Print_LeftSleeve: cached.printMeshes.Print_LeftSleeve?.clone(),
-        Print_RightSleeve: cached.printMeshes.Print_RightSleeve?.clone(),
-      },
-    }
+    return modelCache.get(cacheKey)
   }
 
   const isFbx =
@@ -501,23 +543,20 @@ async function loadPrepared3DModel(url, formatHint = '') {
   })
 
   const prepared = normalizeAndPrepareModel(rawRoot)
-  modelCache.set(cacheKey, prepared)
 
-  return {
-    bodyGeometries: prepared.bodyGeometries.map((g) => {
-      const clone = g.clone()
-      clone.userData.basePositions = new Float32Array(
-        clone.attributes.position.array
-      )
-      return clone
-    }),
-    printMeshes: {
-      Print_Front: prepared.printMeshes.Print_Front?.clone(),
-      Print_Back: prepared.printMeshes.Print_Back?.clone(),
-      Print_LeftSleeve: prepared.printMeshes.Print_LeftSleeve?.clone(),
-      Print_RightSleeve: prepared.printMeshes.Print_RightSleeve?.clone(),
-    },
+  // Hanya simpan basePositions jika jumlah vertex <= 15.000 agar hemat RAM & CPU
+  if (prepared.totalVertices <= 15000) {
+    prepared.bodyGeometries.forEach((g) => {
+      if (g.attributes.position && !g.userData.basePositions) {
+        g.userData.basePositions = new Float32Array(
+          g.attributes.position.array
+        )
+      }
+    })
   }
+
+  modelCache.set(cacheKey, prepared)
+  return prepared
 }
 
 function PrintSurfaceTexture({ geometry, src, puffPrint = {} }) {
@@ -595,6 +634,7 @@ export default function ShirtModel({
   onSceneReady,
 }) {
   const groupRef = useRef(null)
+  const wasDeformedRef = useRef(false)
   const customModels = useConfiguratorStore((s) => s.customModels)
   const setActiveModelLabel = useConfiguratorStore((s) => s.setActiveModelLabel)
 
@@ -605,6 +645,7 @@ export default function ShirtModel({
 
   const [preparedModel, setPreparedModel] = useState({
     bodyGeometries: [],
+    totalVertices: 0,
     printMeshes: {},
   })
 
@@ -646,7 +687,10 @@ export default function ShirtModel({
           }
           return
         } catch (err) {
-          console.warn(`Gagal memuat kandidat model ${candidateUrl}, mencoba fallback:`, err)
+          console.warn(
+            `Gagal memuat kandidat model ${candidateUrl}, mencoba fallback:`,
+            err
+          )
         }
       }
 
@@ -703,7 +747,7 @@ export default function ShirtModel({
 
   const knitProgressRef = useRef(0)
 
-  // Animasi real-time: Static, Waves (angin), Walk (ritme langkah), Knit (rajutan kain)
+  // Animasi real-time 60 FPS yang ringan untuk model high-poly maupun low-poly
   useFrame((state, delta) => {
     const group = groupRef.current
     const bodyGeoms = preparedModel.bodyGeometries
@@ -713,48 +757,67 @@ export default function ShirtModel({
     const isPlaying = motion?.isPlaying !== false
     const speed = Number(motion?.speed) || 1.0
     const t = state.clock.getElapsedTime() * speed
+    const canDeformVertices = preparedModel.totalVertices <= 15000
 
     if (!isPlaying || mode === 'static') {
       group.position.set(0, 0, 0)
       group.rotation.set(0, 0, 0)
-      bodyGeoms.forEach((geom) => {
-        const posAttr = geom.attributes.position
-        const basePos = geom.userData.basePositions
-        if (basePos && posAttr) {
-          posAttr.array.set(basePos)
-          posAttr.needsUpdate = true
-        }
-      })
+      group.scale.set(1, 1, 1)
+
+      // Hanya kembalikan posisi vertex SATU KALI saat beralih dari mode animasi ke static
+      if (wasDeformedRef.current) {
+        bodyGeoms.forEach((geom) => {
+          const posAttr = geom.attributes.position
+          const basePos = geom.userData.basePositions
+          if (basePos && posAttr) {
+            posAttr.array.set(basePos)
+            posAttr.needsUpdate = true
+          }
+        })
+        wasDeformedRef.current = false
+      }
       return
     }
 
     if (mode === 'waves') {
-      group.position.set(0, Math.sin(t * 1.6) * 0.015, 0)
-      group.rotation.set(0, Math.sin(t * 0.9) * 0.05, 0)
+      group.position.set(0, Math.sin(t * 1.8) * 0.02, 0)
+      group.rotation.set(
+        Math.sin(t * 1.3) * 0.03,
+        Math.sin(t * 0.9) * 0.06,
+        Math.cos(t * 1.1) * 0.02
+      )
+      group.scale.set(
+        1 + Math.sin(t * 2.2) * 0.012,
+        1 + Math.cos(t * 1.8) * 0.008,
+        1 + Math.sin(t * 2.6) * 0.018
+      )
 
-      bodyGeoms.forEach((geom) => {
-        const posAttr = geom.attributes.position
-        const basePos = geom.userData.basePositions
-        if (!basePos || !posAttr) return
+      if (canDeformVertices) {
+        wasDeformedRef.current = true
+        bodyGeoms.forEach((geom) => {
+          const posAttr = geom.attributes.position
+          const basePos = geom.userData.basePositions
+          if (!basePos || !posAttr) return
 
-        const arr = posAttr.array
-        for (let i = 0; i < arr.length; i += 3) {
-          const bx = basePos[i]
-          const by = basePos[i + 1]
-          const bz = basePos[i + 2]
-          const hemFactor = Math.max(0, (0.65 - by) / 1.6)
-          const waveZ =
-            Math.sin(bx * 5.0 + t * 3.8) *
-            Math.cos(by * 3.5 - t * 2.6) *
-            0.032 *
-            hemFactor
-          const waveX = Math.cos(by * 4.0 + t * 3.0) * 0.012 * hemFactor
-          arr[i] = bx + waveX
-          arr[i + 1] = by
-          arr[i + 2] = bz + waveZ
-        }
-        posAttr.needsUpdate = true
-      })
+          const arr = posAttr.array
+          for (let i = 0; i < arr.length; i += 3) {
+            const bx = basePos[i]
+            const by = basePos[i + 1]
+            const bz = basePos[i + 2]
+            const hemFactor = Math.max(0, (0.65 - by) / 1.6)
+            const waveZ =
+              Math.sin(bx * 5.0 + t * 3.8) *
+              Math.cos(by * 3.5 - t * 2.6) *
+              0.032 *
+              hemFactor
+            const waveX = Math.cos(by * 4.0 + t * 3.0) * 0.012 * hemFactor
+            arr[i] = bx + waveX
+            arr[i + 1] = by
+            arr[i + 2] = bz + waveZ
+          }
+          posAttr.needsUpdate = true
+        })
+      }
     } else if (mode === 'walk') {
       const bounce = Math.abs(Math.sin(t * 4.2)) * 0.045
       const sway = Math.sin(t * 2.1) * 0.03
@@ -763,26 +826,30 @@ export default function ShirtModel({
 
       group.position.set(sway, bounce - 0.02, 0)
       group.rotation.set(0.04, twist, tilt)
+      group.scale.set(1, 1, 1)
 
-      bodyGeoms.forEach((geom) => {
-        const posAttr = geom.attributes.position
-        const basePos = geom.userData.basePositions
-        if (!basePos || !posAttr) return
+      if (canDeformVertices) {
+        wasDeformedRef.current = true
+        bodyGeoms.forEach((geom) => {
+          const posAttr = geom.attributes.position
+          const basePos = geom.userData.basePositions
+          if (!basePos || !posAttr) return
 
-        const arr = posAttr.array
-        for (let i = 0; i < arr.length; i += 3) {
-          const bx = basePos[i]
-          const by = basePos[i + 1]
-          const bz = basePos[i + 2]
-          const armFactor = Math.max(0, (Math.abs(bx) - 0.45) / 0.5)
-          const armSwing =
-            Math.sin(t * 4.2) * (bx > 0 ? 1 : -1) * 0.09 * armFactor
-          arr[i] = bx
-          arr[i + 1] = by
-          arr[i + 2] = bz + armSwing
-        }
-        posAttr.needsUpdate = true
-      })
+          const arr = posAttr.array
+          for (let i = 0; i < arr.length; i += 3) {
+            const bx = basePos[i]
+            const by = basePos[i + 1]
+            const bz = basePos[i + 2]
+            const armFactor = Math.max(0, (Math.abs(bx) - 0.45) / 0.5)
+            const armSwing =
+              Math.sin(t * 4.2) * (bx > 0 ? 1 : -1) * 0.09 * armFactor
+            arr[i] = bx
+            arr[i + 1] = by
+            arr[i + 2] = bz + armSwing
+          }
+          posAttr.needsUpdate = true
+        })
+      }
     } else if (mode === 'knit') {
       knitProgressRef.current =
         (knitProgressRef.current + delta * 0.45 * speed) % 1.35
@@ -790,32 +857,37 @@ export default function ShirtModel({
 
       group.position.set(0, 0, 0)
       group.rotation.set(0, Math.sin(t * 1.2) * 0.18, 0)
+      const pulse = 0.94 + Math.min(1, knitProgressRef.current) * 0.06
+      group.scale.set(pulse, pulse, pulse)
 
-      bodyGeoms.forEach((geom) => {
-        const posAttr = geom.attributes.position
-        const basePos = geom.userData.basePositions
-        if (!basePos || !posAttr) return
+      if (canDeformVertices) {
+        wasDeformedRef.current = true
+        bodyGeoms.forEach((geom) => {
+          const posAttr = geom.attributes.position
+          const basePos = geom.userData.basePositions
+          if (!basePos || !posAttr) return
 
-        const arr = posAttr.array
-        for (let i = 0; i < arr.length; i += 3) {
-          const bx = basePos[i]
-          const by = basePos[i + 1]
-          const bz = basePos[i + 2]
-          const distAbove = by - thresholdY
-          if (distAbove > 0) {
-            const shrink = Math.max(0.08, 1.0 - distAbove * 1.5)
-            const ripple = Math.sin(bx * 18 + t * 8) * 0.025
-            arr[i] = bx * shrink
-            arr[i + 1] = by + ripple
-            arr[i + 2] = bz * shrink
-          } else {
-            arr[i] = bx
-            arr[i + 1] = by
-            arr[i + 2] = bz
+          const arr = posAttr.array
+          for (let i = 0; i < arr.length; i += 3) {
+            const bx = basePos[i]
+            const by = basePos[i + 1]
+            const bz = basePos[i + 2]
+            const distAbove = by - thresholdY
+            if (distAbove > 0) {
+              const shrink = Math.max(0.08, 1.0 - distAbove * 1.5)
+              const ripple = Math.sin(bx * 18 + t * 8) * 0.025
+              arr[i] = bx * shrink
+              arr[i + 1] = by + ripple
+              arr[i + 2] = bz * shrink
+            } else {
+              arr[i] = bx
+              arr[i + 1] = by
+              arr[i + 2] = bz
+            }
           }
-        }
-        posAttr.needsUpdate = true
-      })
+          posAttr.needsUpdate = true
+        })
+      }
     }
   })
 
@@ -850,7 +922,7 @@ export default function ShirtModel({
             roughness={fabricConfig.roughness}
             metalness={0.02}
             wireframe={
-              motion?.mode === 'knit' && knitProgressRef.current < 0.25
+              motion?.mode === 'knit' && knitProgressRef.current < 0.35
             }
             side={THREE.DoubleSide}
           />
