@@ -343,6 +343,12 @@ export default function useDesignEditor(canvasElement) {
   const [selectedObject, setSelectedObject] = useState(null)
   const [layers, setLayers] = useState([])
 
+  const [analysis, setAnalysis] = useState(null)
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [analysisError, setAnalysisError] = useState('')
+  const analysisCacheRef = useRef(new Map())
+  const lastAnalyzedObjectIdRef = useRef(null)
+
   const refreshLayers = useCallback(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -1313,12 +1319,6 @@ export default function useDesignEditor(canvasElement) {
     }
   }, [applyCanvasSnapshot])
 
-  const [analysis, setAnalysis] = useState(null)
-  const [isAnalyzing, setIsAnalyzing] = useState(false)
-  const [analysisError, setAnalysisError] = useState('')
-  const analysisCacheRef = useRef(new Map())
-  const lastAnalyzedObjectIdRef = useRef(null)
-
   const applyRecommendedPlacement = useCallback((customPlacement = null, preferredEditorId = null) => {
     const canvas = canvasRef.current
     if (!canvas) {
@@ -1551,7 +1551,7 @@ export default function useDesignEditor(canvasElement) {
     } finally {
       setIsAnalyzing(false)
     }
-  }, [applyRecommendedPlacement, syncSelectedObject])
+  }, [applyRecommendedPlacement, syncSelectedObject, setAnalysis, setAnalysisError, setIsAnalyzing])
 
   const exportDesign = useCallback(async (options = {}) => {
     const canvas = canvasRef.current

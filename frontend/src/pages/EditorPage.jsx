@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
+import { Save, FolderPlus, Download, FolderOpen, Trash2 } from 'lucide-react'
 
 import useDesignEditor from '../features/editor/hooks/useDesignEditor'
 import { EDITOR_CONFIG } from '../features/editor/utils/editorConfig'
@@ -444,29 +445,36 @@ export default function EditorPage() {
             maxLength={100}
             onChange={(e) => setProjectName(e.target.value)}
             placeholder="Nama proyek..."
+            title="Klik untuk mengubah nama proyek"
           />
           <button
             type="button"
             className="studio-btn-primary"
             onClick={handleSaveProject}
             disabled={projectBusy || isSwitchingSide}
+            title="Simpan proyek desain ini"
           >
-            {projectBusy ? 'Menyimpan...' : activeProjectId ? 'Simpan' : 'Simpan Proyek'}
+            <Save size={13} />
+            <span>{projectBusy ? 'Menyimpan...' : activeProjectId ? 'Simpan' : 'Simpan Proyek'}</span>
           </button>
           <button
             type="button"
             className="studio-btn-secondary"
             onClick={handleNewProject}
             disabled={projectBusy || isSwitchingSide}
+            title="Buat kanvas proyek baru"
           >
-            Proyek Baru
+            <FolderPlus size={13} />
+            <span>Proyek Baru</span>
           </button>
           <button
             type="button"
             className="studio-btn-accent"
             onClick={() => setActiveTab('export')}
+            title="Buka panel ekspor 3D dan cetak"
           >
-            ⬇ Export
+            <Download size={13} />
+            <span>Export</span>
           </button>
         </div>
       </header>
@@ -639,16 +647,20 @@ export default function EditorPage() {
                         type="button"
                         onClick={() => handleLoadProject(project)}
                         disabled={projectBusy || isSwitchingSide}
+                        title="Buka proyek ini"
                       >
-                        Buka
+                        <FolderOpen size={12} />
+                        <span>Buka</span>
                       </button>
                       <button
                         type="button"
                         className="project-delete-button"
                         onClick={() => handleDeleteProject(project)}
                         disabled={projectBusy || isSwitchingSide}
+                        title="Hapus proyek ini"
                       >
-                        Hapus
+                        <Trash2 size={12} />
+                        <span>Hapus</span>
                       </button>
                     </div>
                   </article>

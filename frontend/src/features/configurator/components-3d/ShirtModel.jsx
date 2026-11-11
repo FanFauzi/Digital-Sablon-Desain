@@ -735,10 +735,7 @@ function PrintSurfaceTexture({
   })
 
   useEffect(() => {
-    if (!src) {
-      setTextures({ colorTexture: null, bumpTexture: null })
-      return undefined
-    }
+    if (!src) return undefined
 
     let isCancelled = false
     let createdColorTex = null
@@ -770,12 +767,15 @@ function PrintSurfaceTexture({
     }
   }, [src, puffPrint?.enabled])
 
-  if (!textures.colorTexture || !geometry) {
+  const activeColorTexture = src ? textures.colorTexture : null
+  const activeBumpTexture = src ? textures.bumpTexture : null
+
+  if (!activeColorTexture || !geometry) {
     return null
   }
 
   const activeBumpMap = puffPrint?.enabled
-    ? textures.bumpTexture
+    ? activeBumpTexture
     : fabricBumpMap
   const activeBumpScale = puffPrint?.enabled
     ? (Number(puffPrint.height) || 0.55) *
@@ -790,7 +790,7 @@ function PrintSurfaceTexture({
   return (
     <mesh geometry={geometry} renderOrder={2}>
       <meshStandardMaterial
-        map={textures.colorTexture}
+        map={activeColorTexture}
         bumpMap={activeBumpMap || null}
         bumpScale={activeBumpScale}
         roughness={roughness}
@@ -798,7 +798,7 @@ function PrintSurfaceTexture({
         transparent
         alphaTest={0.02}
         depthWrite
-        depthFunc={THREE.LEqualDepth}
+        depthFunc={THREE.LessEqualDepth}
         polygonOffset
         polygonOffsetFactor={-2}
         polygonOffsetUnits={-2}
@@ -815,7 +815,6 @@ export default function ShirtModel({
   sidePreviews = {},
   designPreview = null,
   activeSide = 'front',
-  designPreviewVersion = 0,
   materialEffects = {},
   motion = {},
   onSceneReady,
@@ -926,12 +925,7 @@ export default function ShirtModel({
       materialEffects.acidWash.intensity,
       materialEffects.acidWash.scale
     )
-  }, [
-    color,
-    materialEffects?.acidWash?.enabled,
-    materialEffects?.acidWash?.intensity,
-    materialEffects?.acidWash?.scale,
-  ])
+  }, [color, materialEffects])
 
   const knitProgressRef = useRef(0)
 
@@ -1113,9 +1107,7 @@ export default function ShirtModel({
             bumpScale={fabricConfig.bumpScale}
             roughness={fabricConfig.roughness}
             metalness={0.02}
-            wireframe={
-              motion?.mode === 'knit' && knitProgressRef.current < 0.35
-            }
+            wireframe={motion?.mode === 'knit'}
             side={THREE.DoubleSide}
           />
         </mesh>
