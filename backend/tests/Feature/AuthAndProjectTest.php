@@ -589,7 +589,7 @@ class AuthAndProjectTest extends TestCase
             ->assertJsonValidationErrors(['image', 'project_id', 'uploaded_asset_id']);
     }
 
-    public function test_cors_preflight_allows_only_configured_frontend_origins(): void
+    public function test_cors_preflight_allows_a_configured_frontend_origin(): void
     {
         config([
             'cors.allowed_origins' => ['https://studio.example.com'],
@@ -603,13 +603,25 @@ class AuthAndProjectTest extends TestCase
         ])
             ->assertNoContent()
             ->assertHeader('Access-Control-Allow-Origin', 'https://studio.example.com');
+    }
 
-        $this->call('OPTIONS', '/api/v1/shirts', [], [], [], [
+    public function test_cors_preflight_does_not_echo_an_unconfigured_frontend_origin(): void
+    {
+        config([
+            'cors.allowed_origins' => ['https://studio.example.com'],
+            'cors.allowed_origins_patterns' => [],
+        ]);
+
+        $response = $this->call('OPTIONS', '/api/v1/shirts', [], [], [], [
             'HTTP_ORIGIN' => 'https://untrusted.example.net',
             'HTTP_ACCESS_CONTROL_REQUEST_METHOD' => 'GET',
             'HTTP_ACCESS_CONTROL_REQUEST_HEADERS' => 'authorization,content-type',
-        ])
-            ->assertHeaderMissing('Access-Control-Allow-Origin');
+        ]);
+
+        $this->assertNotSame(
+            'https://untrusted.example.net',
+            $response->headers->get('Access-Control-Allow-Origin')
+        );
     }
 
     public function test_project_endpoints_require_authentication(): void
