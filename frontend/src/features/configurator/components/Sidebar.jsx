@@ -74,6 +74,12 @@ export default function Sidebar({
         ? 'hoodie'
         : garmentStyle
 
+    const previousModelUrl =
+      useConfiguratorStore.getState().customModels?.[targetStyle]?.url
+    if (previousModelUrl?.startsWith('blob:')) {
+      URL.revokeObjectURL(previousModelUrl)
+    }
+
     const objectUrl = URL.createObjectURL(file)
     setCustomModelForStyle(targetStyle, {
       url: objectUrl,
@@ -158,9 +164,33 @@ export default function Sidebar({
     })
   }
 
+  const releaseCustomBackgroundImage = () => {
+    const currentUrl = useConfiguratorStore.getState().background?.customImageUrl
+    if (currentUrl?.startsWith('blob:')) {
+      URL.revokeObjectURL(currentUrl)
+    }
+  }
+
+  const handleBackgroundPreset = (presetId) => {
+    releaseCustomBackgroundImage()
+    setBackgroundPreset(presetId)
+  }
+
+  const handleBackgroundColorChange = (color) => {
+    releaseCustomBackgroundImage()
+    setCustomBackgroundColor(color)
+  }
+
+  const handleBackgroundReset = () => {
+    releaseCustomBackgroundImage()
+    resetBackground()
+  }
+
   const handleBgImageUpload = (event) => {
     const file = event.target.files?.[0]
     if (!file) return
+
+    releaseCustomBackgroundImage()
     const url = URL.createObjectURL(file)
     setCustomBackgroundImage(url)
     event.target.value = ''
@@ -301,7 +331,7 @@ export default function Sidebar({
                 />
               </label>
               <small className="sidebar-hint">
-                Mendukung <code>T SHIRT.fbx</code> &amp; <code>oversized_t-shirt.glb</code> secara otomatis dari <code>public/models/</code> atau pilih langsung dari komputer.
+                Model bawaan regular, oversized, dan hoodie menggunakan GLB teroptimasi. Anda juga dapat mengunggah model khusus FBX, GLB, atau GLTF.
               </small>
             </div>
 
@@ -540,7 +570,7 @@ export default function Sidebar({
                     className={`bg-preset-btn ${
                       background.presetId === preset.id ? 'active' : ''
                     }`}
-                    onClick={() => setBackgroundPreset(preset.id)}
+                    onClick={() => handleBackgroundPreset(preset.id)}
                   >
                     <span
                       className={`bg-preset-swatch ${preset.transparent ? 'checkerboard' : ''}`}
@@ -562,7 +592,7 @@ export default function Sidebar({
                 <input
                   type="color"
                   value={background.color || '#f1f5f9'}
-                  onChange={(e) => setCustomBackgroundColor(e.target.value)}
+                  onChange={(e) => handleBackgroundColorChange(e.target.value)}
                 />
                 <span>{background.color || 'Transparan'}</span>
               </div>
@@ -584,7 +614,7 @@ export default function Sidebar({
             <button
               type="button"
               className="sidebar-reset-btn"
-              onClick={resetBackground}
+              onClick={handleBackgroundReset}
             >
               ↺ Reset Background Default
             </button>
