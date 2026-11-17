@@ -156,51 +156,68 @@ export async function export3DVideoWebM({
     throw new Error('Browser ini tidak mendukung perekaman video dari kanvas 3D.')
   }
 
-  const stream = sourceCanvas.captureStream(fps)
+  if (typeof MediaRecorder === 'undefined') {
+    throw new Error('Browser ini tidak menyediakan MediaRecorder untuk ekspor video.')
+  }
+
   const mimeCandidates = [
     'video/mp4',
     'video/webm;codecs=vp9',
     'video/webm;codecs=vp8',
     'video/webm',
   ]
-  const supportedMime =
-    mimeCandidates.find(
-      (type) =>
-        typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(type)
-    ) || 'video/webm'
+  const supportedMime = mimeCandidates.find((type) => MediaRecorder.isTypeSupported(type))
 
-  const recorder = new MediaRecorder(stream, { mimeType: supportedMime })
-  const chunks = []
-
-  recorder.ondataavailable = (event) => {
-    if (event.data && event.data.size > 0) {
-      chunks.push(event.data)
-    }
+  if (!supportedMime) {
+    throw new Error('Browser ini tidak mendukung codec video yang diperlukan untuk ekspor.')
   }
 
-  const recordingPromise = new Promise((resolve, reject) => {
-    recorder.onstop = () => {
-      const blob = new Blob(chunks, { type: supportedMime })
-      resolve(blob)
+  const stream = sourceCanvas.captureStream(fps)
+
+  try {
+    const recorder = new MediaRecorder(stream, { mimeType: supportedMime })
+    const chunks = []
+
+    recorder.ondataavailable = (event) => {
+      if (event.data && event.data.size > 0) {
+        chunks.push(event.data)
+      }
     }
-    recorder.onerror = (err) => reject(err)
-  })
 
-  recorder.start()
-  await new Promise((resolve) => window.setTimeout(resolve, durationMs))
-  recorder.stop()
+    const recordingPromise = new Promise((resolve, reject) => {
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: supportedMime })
+        if (blob.size === 0) {
+          reject(new Error('Browser menghasilkan rekaman video kosong.'))
+          return
+        }
+        resolve(blob)
+      }
+      recorder.onerror = (event) => {
+        reject(event.error || new Error('Perekaman video 3D gagal.'))
+      }
+    })
 
-  const videoBlob = await recordingPromise
-  const ext = supportedMime.includes('mp4') ? 'mp4' : 'webm'
-  const safeName = String(fileNamePrefix || shirtName || 'garment')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
+    recorder.start()
+    await new Promise((resolve) => window.setTimeout(resolve, durationMs))
+    if (recorder.state !== 'inactive') {
+      recorder.stop()
+    }
 
-  const fileName = `${safeName}-animation-${Date.now()}.${ext}`
-  triggerBlobDownload(videoBlob, fileName)
+    const videoBlob = await recordingPromise
+    const ext = supportedMime.includes('mp4') ? 'mp4' : 'webm'
+    const safeName = String(fileNamePrefix || shirtName || 'garment')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
 
-  return { fileName, format: ext }
+    const fileName = `${safeName}-animation-${Date.now()}.${ext}`
+    triggerBlobDownload(videoBlob, fileName)
+
+    return { fileName, format: ext }
+  } finally {
+    stream.getTracks().forEach((track) => track.stop())
+  }
 }
 
 export const export3DVideoAnimation = export3DVideoWebM
