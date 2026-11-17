@@ -53,7 +53,7 @@ Aplikasi web untuk kustomisasi desain kaos dan hoodie: editor 2D berbasis Fabric
 
 ## Persyaratan lokal
 
-- PHP 8.3 atau lebih baru beserta ekstensi Laravel yang diperlukan (minimal PDO untuk database, cURL, Fileinfo, GD, OpenSSL, Mbstring, XML).
+- PHP 8.3 atau lebih baru dengan ekstensi Laravel yang diperlukan: cURL, Fileinfo, GD, OpenSSL, Mbstring, XML, dan PDO driver yang sesuai. Aktifkan `pdo_sqlite` + `sqlite3` untuk konfigurasi default, atau `pdo_mysql` untuk MySQL/MariaDB.
 - Composer 2.
 - Node.js 22 LTS dan npm.
 - SQLite (default) atau MySQL/MariaDB.
