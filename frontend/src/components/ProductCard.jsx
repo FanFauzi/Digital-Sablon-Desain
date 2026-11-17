@@ -6,6 +6,9 @@ export default function ProductCard({ product }) {
   const combinedLabel = `${product?.type || ''} ${product?.name || ''}`.toLowerCase()
   const isHoodie = combinedLabel.includes('hoodie')
   const modelPath = isHoodie ? '/models/hoodie.glb' : '/models/Tshirt.glb'
+  const fallbackModelPath = isHoodie
+    ? '/models/hoodie-classic.glb'
+    : '/models/tshirt-regular.glb'
 
   const materialTag = isHoodie ? 'FRENCH TERRY · 380 GSM' : 'COMBED 24S · 190 GSM'
   const cutTag = isHoodie ? 'BOXY DROP HOOD' : 'REGULAR FIT CREW'
@@ -22,7 +25,7 @@ export default function ProductCard({ product }) {
         aria-label={`Kustomisasi ${product.name}`}
       >
         <div className="product-image">
-          <GarmentModelPreview modelPath={modelPath} />
+          <GarmentModelPreview modelPath={modelPath} fallbackPath={fallbackModelPath} />
 
           <div className="product-badges-top">
             <span className="product-spec-pill">{materialTag}</span>
