@@ -104,8 +104,12 @@ function ModelMessage({ children }) {
 }
 
 export default function GarmentModelPreview({ modelPath, fallbackPath }) {
-  const [resolvedPath, setResolvedPath] = useState('')
-  const [checked, setChecked] = useState(false)
+  const [assetState, setAssetState] = useState({
+    key: '',
+    path: '',
+    status: 'loading',
+  })
+  const selectionKey = `${modelPath || ''}|${fallbackPath || ''}`
 
   useEffect(() => {
     let isMounted = true
@@ -115,27 +119,35 @@ export default function GarmentModelPreview({ modelPath, fallbackPath }) {
       for (const candidate of candidates) {
         if (await checkModelAsset(candidate)) {
           if (isMounted) {
-            setResolvedPath(candidate)
-            setChecked(true)
+            setAssetState({
+              key: selectionKey,
+              path: candidate,
+              status: 'ready',
+            })
           }
           return
         }
       }
 
       if (isMounted) {
-        setResolvedPath('')
-        setChecked(true)
+        setAssetState({
+          key: selectionKey,
+          path: '',
+          status: 'missing',
+        })
       }
     }
 
-    setResolvedPath('')
-    setChecked(false)
     resolveAsset()
 
     return () => {
       isMounted = false
     }
-  }, [modelPath, fallbackPath])
+  }, [modelPath, fallbackPath, selectionKey])
+
+  const isCurrentSelection = assetState.key === selectionKey
+  const resolvedPath = isCurrentSelection ? assetState.path : ''
+  const checked = isCurrentSelection && assetState.status === 'missing'
 
   const unavailable = (
     <ModelMessage>
