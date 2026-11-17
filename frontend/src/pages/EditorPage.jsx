@@ -353,7 +353,7 @@ export default function EditorPage() {
       isSwitchingSide ||
       projectBusy
     ) {
-      return
+      return false
     }
 
     const nextPrintArea =
@@ -367,10 +367,14 @@ export default function EditorPage() {
       if (switched) {
         setSelectedSide(nextSide)
         setCameraView(nextSide)
+        return true
       }
+
+      return false
     } catch (error) {
       console.error(error)
       alert(error.message || 'Gagal mengganti sisi desain.')
+      return false
     } finally {
       setIsSwitchingSide(false)
     }
@@ -397,6 +401,10 @@ export default function EditorPage() {
       setSelectedSize(nextSize)
     }
   }
+
+  const activeCloudProjectId = activeProjectId?.startsWith('cloud:')
+    ? activeProjectId.slice('cloud:'.length)
+    : null
 
   return (
     <main className="editor-page studio-3d-page">
@@ -489,7 +497,7 @@ export default function EditorPage() {
           selectedColor,
           printArea,
           isSwitchingSide,
-          projectId: activeProjectId,
+          projectId: activeCloudProjectId,
         }}
       />
 
@@ -525,7 +533,7 @@ export default function EditorPage() {
           sizeOptions={allSizes}
           printArea={printArea}
           isSwitchingSide={isSwitchingSide}
-          activeProjectId={activeProjectId}
+          activeProjectId={activeCloudProjectId}
           onColorChange={handleColorChange}
           onSizeChange={setSelectedSize}
           onSideChange={handleSideChange}
@@ -613,7 +621,7 @@ export default function EditorPage() {
           <AIAnalysisPanel
             editor={editor}
             productContext={{
-              projectId: activeProjectId,
+              projectId: activeCloudProjectId,
               shirtType: shirt?.type || garmentStyle,
               selectedSide,
               selectedColor,
