@@ -153,7 +153,7 @@ export default function HomePage() {
               <span className="garment-material-badge">190 GSM COMBED 24S</span>
             </div>
             <div className="garment-card-visual" style={{ position: 'relative', width: '100%' }}>
-              <GarmentModelPreview modelPath="/models/Tshirt.glb" />
+              <GarmentModelPreview modelPath="/models/Tshirt.glb" fallbackPath="/models/tshirt-regular.glb" />
             </div>
             <div className="garment-card-body">
               <span className="garment-type-label">DAILY ESSENTIAL</span>
