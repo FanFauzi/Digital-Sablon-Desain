@@ -5,6 +5,7 @@ import { PRINT_PLACEMENT_PRESETS } from '../src/features/configurator/store/conf
 import { getPlacementFromPreset } from '../src/features/editor/utils/placementUtils.js'
 import { getCloudProjectId } from '../src/utils/projectIds.js'
 import { createAnalysisCacheKey } from '../src/features/editor/utils/analysisCacheKey.js'
+import { syncCameraToPrintSide } from '../src/features/configurator/utils/cameraView.js'
 
 test('placement utility preserves position and size from every configured preset', () => {
   for (const preset of PRINT_PLACEMENT_PRESETS) {
@@ -58,4 +59,39 @@ test('AI analysis cache changes when the garment context changes', () => {
     createAnalysisCacheKey({ ...base, currentColor: '#000000' })
   )
   assert.equal(createAnalysisCacheKey({ ...base, editorId: null }), null)
+})
+
+test('camera view updates only after the print side switch succeeds', async () => {
+  let cameraView = 'front'
+  let requestedSide = null
+
+  const switched = await syncCameraToPrintSide(
+    'back',
+    async (side) => {
+      requestedSide = side
+      return true
+    },
+    (side) => {
+      cameraView = side
+    }
+  )
+
+  assert.equal(requestedSide, 'back')
+  assert.equal(switched, true)
+  assert.equal(cameraView, 'back')
+})
+
+test('camera view stays on the active side when the editor switch is blocked', async () => {
+  let cameraView = 'front'
+
+  const switched = await syncCameraToPrintSide(
+    'back',
+    async () => false,
+    (side) => {
+      cameraView = side
+    }
+  )
+
+  assert.equal(switched, false)
+  assert.equal(cameraView, 'front')
 })
