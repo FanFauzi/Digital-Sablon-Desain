@@ -44,6 +44,21 @@ jobs:
       - name: Build frontend
         run: npm run build
 
+      - name: Verify optimized oversized 3D model
+        run: |
+          model="public/models/tshirt-oversized.glb"
+          test -s "$model"
+          size=$(wc -c < "$model")
+          if [ "$size" -gt 1048576 ]; then
+            echo "Oversized model exceeds the 1 MiB asset budget: ${size} bytes"
+            exit 1
+          fi
+          if [ -e "public/models/oversized_t-shirt.glb" ]; then
+            echo "Deprecated 37 MB oversized model must not be reintroduced."
+            exit 1
+          fi
+          echo "Oversized GLB size: ${size} bytes (budget: 1048576 bytes)"
+
   backend:
     name: Backend PHPUnit tests
     runs-on: ubuntu-latest
