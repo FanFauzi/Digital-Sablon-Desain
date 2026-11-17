@@ -33,6 +33,10 @@ class PreviewErrorBoundary extends Component {
     return { hasError: true }
   }
 
+  componentDidCatch(error) {
+    this.props.onError?.(error)
+  }
+
   render() {
     if (this.state.hasError) return this.props.fallback
     return this.props.children
@@ -50,7 +54,20 @@ function GarmentModel({ modelPath }) {
     const initialSize = initialBounds.getSize(new THREE.Vector3())
 
     if (initialSize.z > initialSize.y * 1.35) {
-      object.rotation.x = -Math.PI / 2
+      if (initialSize.x < initialSize.y * 0.7) {
+        // Model hoodie sumber memakai sumbu X untuk kedalaman, Y untuk lebar,
+        // dan Z untuk tinggi. Putar ketiga sumbu agar lebar kembali menghadap kamera.
+        const axisCorrection = new THREE.Matrix4().set(
+          0, 1, 0, 0,
+          0, 0, 1, 0,
+          1, 0, 0, 0,
+          0, 0, 0, 1
+        )
+        object.quaternion.setFromRotationMatrix(axisCorrection)
+      } else {
+        // Model Z-up standar: ubah sumbu Z menjadi sumbu tinggi Y.
+        object.rotation.x = -Math.PI / 2
+      }
     }
 
     object.updateMatrixWorld(true)
@@ -147,11 +164,32 @@ export default function GarmentModelPreview({ modelPath, fallbackPath }) {
 
   const isCurrentSelection = assetState.key === selectionKey
   const resolvedPath = isCurrentSelection ? assetState.path : ''
-  const checked = isCurrentSelection && assetState.status === 'missing'
+  const checked =
+    isCurrentSelection &&
+    (assetState.status === 'missing' || assetState.status === 'error')
+
+  const handleModelError = async (error) => {
+    console.error(`Gagal merender model 3D ${resolvedPath}:`, error)
+
+    if (fallbackPath && fallbackPath !== resolvedPath && (await checkModelAsset(fallbackPath))) {
+      setAssetState({
+        key: selectionKey,
+        path: fallbackPath,
+        status: 'ready',
+      })
+      return
+    }
+
+    setAssetState({
+      key: selectionKey,
+      path: '',
+      status: 'error',
+    })
+  }
 
   const unavailable = (
     <ModelMessage>
-      Model 3D belum tersedia. Pastikan file GLB berada di frontend/public/models.
+      Model 3D gagal dimuat. Periksa file GLB dan console browser untuk detailnya.
     </ModelMessage>
   )
 
@@ -172,7 +210,11 @@ export default function GarmentModelPreview({ modelPath, fallbackPath }) {
           <ModelMessage>Memuat model 3D...</ModelMessage>
         )
       ) : (
-        <PreviewErrorBoundary key={resolvedPath} fallback={unavailable}>
+        <PreviewErrorBoundary
+          key={resolvedPath}
+          fallback={unavailable}
+          onError={handleModelError}
+        >
           <Canvas
             dpr={[1, 1.5]}
             camera={{ position: [0, 0.08, 2.65], fov: 36 }}
