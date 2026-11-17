@@ -8,6 +8,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 use JsonException;
 
 class DesignAnalysisController extends Controller
@@ -88,8 +89,20 @@ class DesignAnalysisController extends Controller
             'shirt_type' => ['nullable', 'string', 'max:40'],
             'current_side' => ['nullable', 'string', 'in:front,back'],
             'current_color' => ['nullable', 'string', 'max:32'],
-            'project_id' => ['nullable', 'integer', 'exists:projects,id'],
-            'uploaded_asset_id' => ['nullable', 'integer', 'exists:uploaded_assets,id'],
+            'project_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('projects', 'id')->where(
+                    fn ($query) => $query->where('user_id', $request->user()->id)
+                ),
+            ],
+            'uploaded_asset_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('uploaded_assets', 'id')->where(
+                    fn ($query) => $query->where('user_id', $request->user()->id)
+                ),
+            ],
         ]);
 
         $startedAtMs = (int) round(microtime(true) * 1000);
