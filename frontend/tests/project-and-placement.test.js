@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import { PRINT_PLACEMENT_PRESETS } from '../src/features/configurator/store/configuratorStore.js'
 import { getPlacementFromPreset } from '../src/features/editor/utils/placementUtils.js'
 import { getCloudProjectId } from '../src/utils/projectIds.js'
+import { createAnalysisCacheKey } from '../src/features/editor/utils/analysisCacheKey.js'
 
 test('placement utility preserves position and size from every configured preset', () => {
   for (const preset of PRINT_PLACEMENT_PRESETS) {
@@ -34,4 +35,27 @@ test('local, missing, and malformed project identifiers are not sent to cloud AP
   assert.equal(getCloudProjectId('cloud:0'), null)
   assert.equal(getCloudProjectId('cloud:abc'), null)
   assert.equal(getCloudProjectId('cloud:12/exports'), null)
+})
+
+test('AI analysis cache changes when the garment context changes', () => {
+  const base = {
+    editorId: 'artwork-1',
+    currentSide: 'front',
+    shirtType: 'tshirt',
+    currentColor: '#ffffff',
+  }
+
+  assert.notEqual(
+    createAnalysisCacheKey(base),
+    createAnalysisCacheKey({ ...base, currentSide: 'back' })
+  )
+  assert.notEqual(
+    createAnalysisCacheKey(base),
+    createAnalysisCacheKey({ ...base, shirtType: 'hoodie' })
+  )
+  assert.notEqual(
+    createAnalysisCacheKey(base),
+    createAnalysisCacheKey({ ...base, currentColor: '#000000' })
+  )
+  assert.equal(createAnalysisCacheKey({ ...base, editorId: null }), null)
 })
