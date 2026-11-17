@@ -47,40 +47,20 @@ jobs:
       - name: Build frontend
         run: npm run build
 
-      - name: Verify optimized oversized 3D model
+      - name: Verify optimized garment GLB assets
         run: |
           node --input-type=module <<'NODE'
           import { readFileSync, existsSync } from 'node:fs'
 
-          const modelPath = 'public/models/tshirt-oversized.glb'
-          const deprecatedPath = 'public/models/oversized_t-shirt.glb'
-          const model = readFileSync(modelPath)
-
-          if (model.length > 1024 * 1024) {
-            throw new Error(`Oversized GLB exceeds 1 MiB budget: ${model.length} bytes`)
-          }
-          if (existsSync(deprecatedPath)) {
-            throw new Error('Deprecated 37 MB oversized model must not be reintroduced.')
-          }
-          if (model.toString('ascii', 0, 4) !== 'glTF') {
-            throw new Error('Oversized garment asset is not a valid GLB file.')
-          }
-
-          const version = model.readUInt32LE(4)
-          const declaredLength = model.readUInt32LE(8)
-          const jsonLength = model.readUInt32LE(12)
-          const jsonType = model.readUInt32LE(16)
-
-          if (version !== 2 || declaredLength !== model.length || jsonType !== 0x4e4f534a) {
-            throw new Error('Oversized GLB header or JSON chunk is invalid.')
-          }
-
-          if (20 + jsonLength > model.length) {
-            throw new Error('Oversized GLB JSON chunk is truncated.')
-          }
-
-          const gltf = JSON.parse(model.toString('utf8', 20, 20 + jsonLength).replace(/\0+$/, '').trim())
-          const meshNames = new Set((gltf.meshes || []).map((mesh) => mesh.name))
+          const models = [
+            'public/models/tshirt-regular.glb',
+            'public/models/tshirt-oversized.glb',
+            'public/models/hoodie-classic.glb',
+          ]
+          const deprecatedPaths = [
+            'public/models/oversized_t-shirt.glb',
+            'public/models/T SHIRT.fbx',
+          ]
           const requiredMeshes = [
             'Garment_Body',
             'Print_Front',
@@ -88,13 +68,47 @@ jobs:
             'Print_LeftSleeve',
             'Print_RightSleeve',
           ]
-          const missingMeshes = requiredMeshes.filter((name) => !meshNames.has(name))
 
-          if (missingMeshes.length > 0) {
-            throw new Error(`Oversized GLB is missing print surfaces: ${missingMeshes.join(', ')}`)
+          for (const deprecatedPath of deprecatedPaths) {
+            if (existsSync(deprecatedPath)) {
+              throw new Error(`Deprecated garment asset must not be reintroduced: ${deprecatedPath}`)
+            }
           }
 
-          console.log(`Validated GLB v${version}: ${model.length} bytes; all 5 garment/print meshes present.`)
+          for (const modelPath of models) {
+            const model = readFileSync(modelPath)
+
+            if (model.length > 1024 * 1024) {
+              throw new Error(`${modelPath} exceeds the 1 MiB budget: ${model.length} bytes`)
+            }
+            if (model.toString('ascii', 0, 4) !== 'glTF') {
+              throw new Error(`${modelPath} is not a valid GLB file.`)
+            }
+
+            const version = model.readUInt32LE(4)
+            const declaredLength = model.readUInt32LE(8)
+            const jsonLength = model.readUInt32LE(12)
+            const jsonType = model.readUInt32LE(16)
+
+            if (version !== 2 || declaredLength !== model.length || jsonType !== 0x4e4f534a) {
+              throw new Error(`${modelPath} has an invalid GLB v2 header or JSON chunk.`)
+            }
+            if (20 + jsonLength > model.length) {
+              throw new Error(`${modelPath} JSON chunk is truncated.`)
+            }
+
+            const gltf = JSON.parse(
+              model.toString('utf8', 20, 20 + jsonLength).replace(/\0+$/, '').trim()
+            )
+            const meshNames = new Set((gltf.meshes || []).map((mesh) => mesh.name))
+            const missingMeshes = requiredMeshes.filter((name) => !meshNames.has(name))
+
+            if (missingMeshes.length > 0) {
+              throw new Error(`${modelPath} is missing print surfaces: ${missingMeshes.join(', ')}`)
+            }
+
+            console.log(`Validated ${modelPath}: GLB v${version}, ${model.length} bytes, all print meshes present.`)
+          }
           NODE
 
   backend:
