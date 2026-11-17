@@ -146,7 +146,8 @@ export default function Sidebar({
     if (isSwitchingSide) return
 
     if (preset.side && preset.side !== selectedSide) {
-      await onSideChange(preset.side)
+      const switched = await onSideChange(preset.side)
+      if (!switched) return
       setCameraView(preset.side)
     }
 
