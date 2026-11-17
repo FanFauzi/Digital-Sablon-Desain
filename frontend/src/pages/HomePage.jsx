@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { ArrowUpRight, Sparkles, Box, Sliders } from 'lucide-react'
-import GarmentVisual from '../components/GarmentVisual'
+import GarmentModelPreview from '../components/GarmentModelPreview'
 
 export default function HomePage() {
   return (
@@ -10,7 +10,7 @@ export default function HomePage() {
         <div className="ticker-track">
           <span>ATELIER ED. 2026 // DROP 01</span>
           <span className="ticker-sep">✦</span>
-          <span>HEAVYWEIGHT COMBED 240 GSM & FRENCH TERRY 380 GSM</span>
+          <span>COMBED 24S T-SHIRT & FRENCH TERRY 380 GSM</span>
           <span className="ticker-sep">✦</span>
           <span>REALTIME 3D GARMENT CONFIGURATOR</span>
           <span className="ticker-sep">✦</span>
@@ -150,24 +150,23 @@ export default function HomePage() {
         </div>
 
         <div className="editorial-collection-grid">
-          {/* Card 1: Oversized Tee */}
           <article className="featured-garment-card">
             <div className="garment-card-top">
               <span className="garment-number">01</span>
-              <span className="garment-material-badge">240 GSM COMBED</span>
+              <span className="garment-material-badge">190 GSM COMBED 24S</span>
             </div>
-            <div className="garment-card-visual">
-              <GarmentVisual type="oversized" name="Oversized" color="#1F201D" />
+            <div className="garment-card-visual" style={{ position: 'relative', width: '100%' }}>
+              <GarmentModelPreview modelPath="/models/Tshirt.glb" />
             </div>
             <div className="garment-card-body">
-              <span className="garment-type-label">STREETWEAR SILHOUETTE</span>
-              <h3 className="garment-name">Oversized T-Shirt</h3>
+              <span className="garment-type-label">DAILY ESSENTIAL</span>
+              <h3 className="garment-name">Basic T-Shirt</h3>
               <p className="garment-desc">
-                Potongan boxy lebar dengan sambungan bahu menurun (drop shoulder). Area cetak dada
-                dan punggung ekstra luas.
+                Potongan reguler klasik untuk kustomisasi grafis, tipografi, dan identitas visual
+                pada bagian depan, belakang, serta lengan.
               </p>
               <div className="garment-card-action">
-                <Link to="/editor/2" className="btn-card-primary">
+                <Link to="/editor/1" className="btn-card-primary">
                   <span>Mulai Kustomisasi</span>
                   <ArrowUpRight size={14} />
                 </Link>
@@ -175,49 +174,22 @@ export default function HomePage() {
             </div>
           </article>
 
-          {/* Card 2: Classic Hoodie */}
           <article className="featured-garment-card spotlight">
             <div className="garment-card-top">
               <span className="garment-number">02</span>
               <span className="garment-material-badge highlight">380 GSM FRENCH TERRY</span>
             </div>
-            <div className="garment-card-visual">
-              <GarmentVisual type="hoodie" name="Hoodie" color="#262724" />
+            <div className="garment-card-visual" style={{ position: 'relative', width: '100%' }}>
+              <GarmentModelPreview modelPath="/models/hoodie.glb" />
             </div>
             <div className="garment-card-body">
               <span className="garment-type-label">HEAVYWEIGHT FLEECE</span>
               <h3 className="garment-name">Classic Hoodie</h3>
               <p className="garment-desc">
-                Tudung ganda kokoh dengan saku kanguru presisi. Mendukung sablon dada, lengan kanan-kiri,
-                dan punggung penuh.
+                Hoodie pullover dengan area kustomisasi pada bagian dada, punggung, dan kedua lengan.
               </p>
               <div className="garment-card-action">
                 <Link to="/editor/3" className="btn-card-primary">
-                  <span>Mulai Kustomisasi</span>
-                  <ArrowUpRight size={14} />
-                </Link>
-              </div>
-            </div>
-          </article>
-
-          {/* Card 3: Basic Crewneck Tee */}
-          <article className="featured-garment-card">
-            <div className="garment-card-top">
-              <span className="garment-number">03</span>
-              <span className="garment-material-badge">190 GSM COMBED 24S</span>
-            </div>
-            <div className="garment-card-visual">
-              <GarmentVisual type="regular" name="Basic" color="#2F312E" />
-            </div>
-            <div className="garment-card-body">
-              <span className="garment-type-label">DAILY ESSENTIAL</span>
-              <h3 className="garment-name">Basic Crewneck T-Shirt</h3>
-              <p className="garment-desc">
-                Potongan reguler klasik dengan rib leher elastis 2.5 cm. Pilihan ideal untuk desain
-                tipografi minimalis dan grafis vintage.
-              </p>
-              <div className="garment-card-action">
-                <Link to="/editor/1" className="btn-card-primary">
                   <span>Mulai Kustomisasi</span>
                   <ArrowUpRight size={14} />
                 </Link>
