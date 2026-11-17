@@ -70,17 +70,28 @@ class ShirtController extends Controller
 
     private function ensureModel3dPath(Shirt $shirt): void
     {
-        if (! empty($shirt->model_3d_path)) {
-            return;
-        }
-
         $nameLower = strtolower((string) $shirt->name);
-        if ($shirt->type === 'hoodie' || str_contains($nameLower, 'hoodie')) {
-            $shirt->model_3d_path = '/models/hoodie-classic.glb';
-        } elseif (str_contains($nameLower, 'oversize')) {
-            $shirt->model_3d_path = '/models/oversized_t-shirt.glb';
-        } else {
-            $shirt->model_3d_path = '/models/T SHIRT.fbx';
+
+        $expectedPath = match (true) {
+            $shirt->type === 'hoodie' || str_contains($nameLower, 'hoodie')
+                => '/models/hoodie-classic.glb',
+            str_contains($nameLower, 'oversize')
+                => '/models/tshirt-oversized.glb',
+            default
+                => '/models/tshirt-regular.glb',
+        };
+
+        $legacyPaths = [
+            '/models/oversized_t-shirt.glb',
+            '/models/T SHIRT.fbx',
+            '/models/t-shirt.fbx',
+        ];
+
+        if (
+            empty($shirt->model_3d_path) ||
+            in_array($shirt->model_3d_path, $legacyPaths, true)
+        ) {
+            $shirt->model_3d_path = $expectedPath;
         }
     }
 
