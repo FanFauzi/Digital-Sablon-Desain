@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Http\Controllers\Api\V1\UploadedAssetController;
 use App\Models\UploadedAsset;
+use App\Models\Shirt;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -377,6 +378,31 @@ class AuthAndProjectTest extends TestCase
             'file_name' => 'digital-sablon-classic-hoodie-front-300dpi.png',
             'dpi' => 300,
         ]);
+    }
+
+    public function test_shirt_api_normalizes_legacy_model_paths_to_existing_glb_assets(): void
+    {
+        $regular = Shirt::create([
+            'name' => 'Basic T-Shirt',
+            'type' => 'tshirt',
+            'model_3d_path' => '/models/T SHIRT.fbx',
+            'is_active' => true,
+        ]);
+
+        $oversized = Shirt::create([
+            'name' => 'Oversized T-Shirt',
+            'type' => 'tshirt',
+            'model_3d_path' => '/models/oversized_t-shirt.glb',
+            'is_active' => true,
+        ]);
+
+        $this->getJson('/api/v1/shirts/' . $regular->id)
+            ->assertOk()
+            ->assertJsonPath('data.model_3d_path', '/models/tshirt-regular.glb');
+
+        $this->getJson('/api/v1/shirts/' . $oversized->id)
+            ->assertOk()
+            ->assertJsonPath('data.model_3d_path', '/models/tshirt-oversized.glb');
     }
 
     public function test_design_analysis_endpoint_requires_authentication(): void
