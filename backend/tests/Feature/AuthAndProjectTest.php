@@ -311,6 +311,36 @@ class AuthAndProjectTest extends TestCase
         $this->postJson('/api/v1/designs/analyze', [])->assertUnauthorized();
     }
 
+    public function test_design_analysis_rejects_project_and_asset_ids_owned_by_another_user(): void
+    {
+        $owner = User::factory()->create();
+        $requestingUser = User::factory()->create();
+
+        $privateProject = $owner->projects()->create([
+            'name' => 'Private project',
+            'status' => 'draft',
+            'canvas_config' => [],
+            'editor_state' => [],
+        ]);
+
+        $privateAsset = $owner->uploadedAssets()->create([
+            'original_name' => 'private-artwork.png',
+            'file_path' => 'uploaded-assets/private-artwork.png',
+            'mime_type' => 'image/png',
+            'file_size' => 1,
+            'image_width' => 1,
+            'image_height' => 1,
+        ]);
+
+        $this->actingAs($requestingUser, 'sanctum')
+            ->postJson('/api/v1/designs/analyze', [
+                'project_id' => $privateProject->id,
+                'uploaded_asset_id' => $privateAsset->id,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['image', 'project_id', 'uploaded_asset_id']);
+    }
+
     public function test_project_endpoints_require_authentication(): void
     {
         $this->getJson('/api/v1/projects')->assertUnauthorized();
