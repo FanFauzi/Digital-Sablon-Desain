@@ -18,18 +18,6 @@ const FALLBACK_PRODUCTS = [
     ],
   },
   {
-    id: 2,
-    name: 'Oversized T-Shirt',
-    type: 'tshirt',
-    description: 'Kaos potongan boxy drop-shoulder streetwear 240 GSM dengan area cetak ekstra lebar.',
-    variants: [
-      { color_name: 'Black', color_hex: '#141413', size: 'M' },
-      { color_name: 'White', color_hex: '#FFFFFF', size: 'M' },
-      { color_name: 'Charcoal', color_hex: '#292B29', size: 'M' },
-      { color_name: 'Sage', color_hex: '#A8ADA0', size: 'M' },
-    ],
-  },
-  {
     id: 3,
     name: 'Classic Hoodie',
     type: 'hoodie',
@@ -107,9 +95,6 @@ export default function CatalogPage() {
       if (!matchesSearch) return false
 
       if (selectedCategory === 'all') return true
-      if (selectedCategory === 'oversized') {
-        return lowerName.includes('oversize') || lowerType.includes('oversize')
-      }
       if (selectedCategory === 'hoodie') {
         return lowerName.includes('hoodie') || lowerType.includes('hoodie')
       }
@@ -163,7 +148,6 @@ export default function CatalogPage() {
             className={`filter-pill ${selectedCategory === 'oversized' ? 'active' : ''}`}
             onClick={() => setSelectedCategory('oversized')}
           >
-            Oversized Tee (240 GSM)
           </button>
           <button
             type="button"
@@ -177,7 +161,7 @@ export default function CatalogPage() {
             className={`filter-pill ${selectedCategory === 'regular' ? 'active' : ''}`}
             onClick={() => setSelectedCategory('regular')}
           >
-            Basic Regular Fit
+            T-Shirt
           </button>
         </div>
 
@@ -207,7 +191,7 @@ export default function CatalogPage() {
       {/* Loading Skeleton */}
       {loading && (
         <div className="catalog-skeleton-grid" aria-label="Memuat katalog...">
-          {[1, 2, 3].map((n) => (
+          {[1, 2].map((n) => (
             <div key={n} className="skeleton-card">
               <div className="skeleton-image" />
               <div className="skeleton-line title" />
