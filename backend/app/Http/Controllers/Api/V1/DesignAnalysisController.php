@@ -259,13 +259,25 @@ PROMPT;
             $response = null;
             $usedModel = null;
             $lastConnectionError = null;
+            $totalDeadline = microtime(true) + 25.0;
 
             foreach ($modelsToTry as $candidateModel) {
+                $remainingSeconds = $totalDeadline - microtime(true);
+                if ($remainingSeconds <= 1.0) {
+                    Log::warning('Gemini fallback budget exhausted before the next model attempt.', [
+                        'last_model' => $usedModel,
+                    ]);
+                    break;
+                }
+
+                $requestTimeout = min(22.0, $remainingSeconds);
+                $connectTimeout = min(8.0, $requestTimeout);
+
                 try {
                     $attemptResponse = Http::acceptJson()
                         ->withHeaders(['x-goog-api-key' => $apiKey])
-                        ->connectTimeout(8)
-                        ->timeout(22)
+                        ->connectTimeout($connectTimeout)
+                        ->timeout($requestTimeout)
                         ->post(
                             "https://generativelanguage.googleapis.com/v1beta/models/{$candidateModel}:generateContent",
                             $payload
