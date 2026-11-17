@@ -76,7 +76,11 @@ export async function uploadDesignAsset(fileOrBlob, fallbackName = 'design-image
     throw new Error('File gambar tidak valid untuk diunggah.')
   }
 
-  const extension = fileOrBlob.type === 'image/jpeg' ? 'jpg' : 'png'
+  const extension = {
+    'image/jpeg': 'jpg',
+    'image/webp': 'webp',
+    'image/png': 'png',
+  }[String(fileOrBlob.type || '').toLowerCase()] || 'png'
   const fileName =
     typeof fileOrBlob.name === 'string' && fileOrBlob.name.trim()
       ? fileOrBlob.name.trim()
