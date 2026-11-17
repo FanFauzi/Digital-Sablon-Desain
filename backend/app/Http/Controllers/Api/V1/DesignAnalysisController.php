@@ -538,8 +538,20 @@ PROMPT;
         }
 
         // Jangan izinkan AI menempatkan desain pada sisi yang berbeda dari canvas aktif.
-        if ((self::PLACEMENT_PRESETS[$code]['side'] ?? null) !== $currentSide) {
+        $requestedPresetSide = self::PLACEMENT_PRESETS[$code]['side'] ?? null;
+        $requestedPlacementSide = $placement['side'] ?? null;
+        $sideMismatch = $requestedPresetSide !== $currentSide
+            || (is_string($requestedPlacementSide) && $requestedPlacementSide !== $currentSide);
+
+        if ($sideMismatch) {
             $code = $this->defaultPresetCodeForSide($currentSide, $complexity, $aspectRatio);
+            $fallbackPreset = self::PLACEMENT_PRESETS[$code];
+            $placement['area'] = $fallbackPreset['area'];
+            $placement['scale_category'] = $fallbackPreset['scale_category'];
+            $placement['position_x_percent'] = $fallbackPreset['position_x_percent'];
+            $placement['position_y_percent'] = $fallbackPreset['position_y_percent'];
+            $placement['width_percent'] = $fallbackPreset['width_percent'];
+            $placement['reason'] = $this->defaultReasonForPreset($code);
         }
 
         $preset = self::PLACEMENT_PRESETS[$code] ?? self::PLACEMENT_PRESETS['center_chest'];
