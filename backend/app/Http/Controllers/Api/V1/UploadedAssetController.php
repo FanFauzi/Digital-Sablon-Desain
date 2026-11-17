@@ -22,8 +22,8 @@ class UploadedAssetController extends Controller
             'image' => [
                 'required',
                 'file',
-                'mimes:png,jpg,jpeg',
-                'mimetypes:image/png,image/jpeg',
+                'mimes:png,jpg,jpeg,webp',
+                'mimetypes:image/png,image/jpeg,image/webp',
                 'max:15360',
             ],
         ], [
@@ -44,13 +44,17 @@ class UploadedAssetController extends Controller
         }
 
         $mimeType = $imageInfo['mime'] ?? $file->getMimeType() ?? 'image/png';
-        if (! in_array($mimeType, ['image/png', 'image/jpeg'], true)) {
+        if (! in_array($mimeType, ['image/png', 'image/jpeg', 'image/webp'], true)) {
             throw ValidationException::withMessages([
                 'image' => ['Format gambar harus PNG atau JPG/JPEG.'],
             ]);
         }
 
-        $extension = $mimeType === 'image/jpeg' ? 'jpg' : 'png';
+        $extension = match ($mimeType) {
+            'image/jpeg' => 'jpg',
+            'image/webp' => 'webp',
+            default => 'png',
+        };
         $user = $request->user();
         $relativePath = sprintf(
             'uploaded-assets/%d/%s.%s',
@@ -116,14 +120,18 @@ class UploadedAssetController extends Controller
         string $dataUrl,
         ?string $originalName = null
     ): UploadedAsset {
-        if (! preg_match('/^data:(image\/(?:png|jpeg|jpg));base64,(.+)$/s', $dataUrl, $matches)) {
+        if (! preg_match('/^data:(image\/(?:png|jpeg|jpg|webp));base64,(.+)$/s', $dataUrl, $matches)) {
             throw ValidationException::withMessages([
                 'editor_state' => ['Format data gambar pada proyek tidak didukung. Gunakan PNG atau JPG.'],
             ]);
         }
 
         $rawMime = strtolower($matches[1]);
-        $mimeType = $rawMime === 'image/png' ? 'image/png' : 'image/jpeg';
+        $mimeType = match ($rawMime) {
+            'image/png' => 'image/png',
+            'image/webp' => 'image/webp',
+            default => 'image/jpeg',
+        };
         $binary = base64_decode(str_replace([' ', "\r", "\n"], '', $matches[2]), true);
 
         if ($binary === false || strlen($binary) === 0) {
@@ -147,13 +155,17 @@ class UploadedAssetController extends Controller
         }
 
         $detectedMime = $imageInfo['mime'] ?? $mimeType;
-        if (! in_array($detectedMime, ['image/png', 'image/jpeg'], true)) {
+        if (! in_array($detectedMime, ['image/png', 'image/jpeg', 'image/webp'], true)) {
             throw ValidationException::withMessages([
                 'editor_state' => ['Format gambar pada proyek harus PNG atau JPG/JPEG.'],
             ]);
         }
 
-        $extension = $detectedMime === 'image/jpeg' ? 'jpg' : 'png';
+        $extension = match ($detectedMime) {
+            'image/jpeg' => 'jpg',
+            'image/webp' => 'webp',
+            default => 'png',
+        };
         $relativePath = sprintf(
             'uploaded-assets/%d/%s.%s',
             $user->id,
