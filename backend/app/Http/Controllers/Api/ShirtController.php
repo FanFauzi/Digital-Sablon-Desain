@@ -70,29 +70,13 @@ class ShirtController extends Controller
 
     private function ensureModel3dPath(Shirt $shirt): void
     {
-        $nameLower = strtolower((string) $shirt->name);
+        $expectedPath = $shirt->type === 'hoodie'
+            ? '/models/hoodie.glb'
+            : '/models/Tshirt.glb';
 
-        $expectedPath = match (true) {
-            $shirt->type === 'hoodie' || str_contains($nameLower, 'hoodie')
-                => '/models/hoodie-classic.glb',
-            str_contains($nameLower, 'oversize')
-                => '/models/tshirt-oversized.glb',
-            default
-                => '/models/tshirt-regular.glb',
-        };
-
-        $legacyPaths = [
-            '/models/oversized_t-shirt.glb',
-            '/models/T SHIRT.fbx',
-            '/models/t-shirt.fbx',
-        ];
-
-        if (
-            empty($shirt->model_3d_path) ||
-            in_array($shirt->model_3d_path, $legacyPaths, true)
-        ) {
-            $shirt->model_3d_path = $expectedPath;
-        }
+        // Model katalog ditentukan oleh jenis produk aktif agar tidak tersangkut
+        // pada path model lama yang tersimpan di database.
+        $shirt->model_3d_path = $expectedPath;
     }
 
     private function ensureSleevePrintAreas(Shirt $shirt): void
