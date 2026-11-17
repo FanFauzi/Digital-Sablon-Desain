@@ -236,6 +236,26 @@ class AuthAndProjectTest extends TestCase
                             ],
                         ],
                     ],
+                    'left_sleeve' => [
+                        'objects' => [
+                            [
+                                'type' => 'i-text',
+                                'editorId' => 'obj-left-sleeve-1',
+                                'editorName' => 'Inisial lengan kiri',
+                                'text' => 'DS',
+                            ],
+                        ],
+                    ],
+                    'right_sleeve' => [
+                        'objects' => [
+                            [
+                                'type' => 'i-text',
+                                'editorId' => 'obj-right-sleeve-1',
+                                'editorName' => 'Tahun lengan kanan',
+                                'text' => '2026',
+                            ],
+                        ],
+                    ],
                 ],
             ],
         ];
@@ -254,7 +274,21 @@ class AuthAndProjectTest extends TestCase
             ->assertJsonPath('data.editor_state.sides.front.objects.0.uploadedAssetId', $assetId)
             ->assertJsonPath('data.editor_state.sides.front.objects.0.src', "/api/v1/assets/{$assetId}/content")
             ->assertJsonPath('data.editor_state.sides.back.objects.0.text', 'CREW')
+            ->assertJsonPath('data.editor_state.sides.left_sleeve.objects.0.text', 'DS')
+            ->assertJsonPath('data.editor_state.sides.right_sleeve.objects.0.text', '2026')
             ->assertJsonPath('data.canvas_config.shirt_id', $shirtId);
+
+        $this->assertDatabaseHas('design_objects', [
+            'project_id' => $projectId,
+            'object_name' => 'Inisial lengan kiri',
+            'properties->side' => 'left_sleeve',
+        ]);
+        $this->assertDatabaseHas('design_objects', [
+            'project_id' => $projectId,
+            'object_name' => 'Tahun lengan kanan',
+            'properties->side' => 'right_sleeve',
+        ]);
+        $this->assertDatabaseCount('design_objects', 4);
 
         // Pembaruan proyek (PUT)
         $payload['name'] = 'Kaos Komunitas Revisi';
