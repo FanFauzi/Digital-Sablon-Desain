@@ -730,6 +730,7 @@ function PrintSurfaceTexture({
   fabricBumpScale = 0.012,
 }) {
   const [textures, setTextures] = useState({
+    source: null,
     colorTexture: null,
     bumpTexture: null,
   })
@@ -754,9 +755,15 @@ function PrintSurfaceTexture({
         createdBumpTex.needsUpdate = true
       }
       setTextures({
+        source: src,
         colorTexture: createdColorTex,
         bumpTexture: createdBumpTex,
       })
+    }
+    img.onerror = () => {
+      if (!isCancelled) {
+        console.warn('Gagal memuat tekstur desain pada preview 3D:', src)
+      }
     }
     img.src = src
 
@@ -767,8 +774,10 @@ function PrintSurfaceTexture({
     }
   }, [src, puffPrint?.enabled])
 
-  const activeColorTexture = src ? textures.colorTexture : null
-  const activeBumpTexture = src ? textures.bumpTexture : null
+  // Jangan render tekstur dari source sebelumnya ketika artwork sedang berganti.
+  const isCurrentTexture = Boolean(src) && textures.source === src
+  const activeColorTexture = isCurrentTexture ? textures.colorTexture : null
+  const activeBumpTexture = isCurrentTexture ? textures.bumpTexture : null
 
   if (!activeColorTexture || !geometry) {
     return null
