@@ -49,6 +49,7 @@ export default function Sidebar({
 }) {
   const activeTab = useConfiguratorStore((s) => s.activeTab)
   const setActiveTab = useConfiguratorStore((s) => s.setActiveTab)
+  const workspaceMode = useConfiguratorStore((s) => s.workspaceMode)
 
   const garmentStyle = useConfiguratorStore((s) => s.garmentStyle)
   const setGarmentStyle = useConfiguratorStore((s) => s.setGarmentStyle)
@@ -168,6 +169,10 @@ export default function Sidebar({
   const handleExport3D = async (formatOverride) => {
     const format = formatOverride || exportConfig.format
     if (exportConfig.isExporting) return
+    if (workspaceMode === '2d') {
+      setExportStatus('Beralih ke mode Split atau 3D untuk mengekspor mockup 3D.')
+      return
+    }
 
     updateExportConfig({ isExporting: true })
     setExportStatus(`Mengekspor ${format.toUpperCase()}...`)
@@ -877,11 +882,16 @@ export default function Sidebar({
 
             <div className="sidebar-block">
               <label className="sidebar-label">Unduh 3D Mockup</label>
+              {workspaceMode === '2d' && (
+                <p className="sidebar-export-status">
+                  Aktifkan mode Split atau 3D untuk mengunduh mockup dan model 3D.
+                </p>
+              )}
               <div className="export-button-stack">
                 <button
                   type="button"
                   className="sidebar-action-btn full-width"
-                  disabled={exportConfig.isExporting}
+                  disabled={exportConfig.isExporting || workspaceMode === '2d'}
                   onClick={() => handleExport3D('png')}
                 >
                   ⬇ Export 3D Mockup PNG ({exportConfig.resolution})
@@ -889,7 +899,7 @@ export default function Sidebar({
                 <button
                   type="button"
                   className="sidebar-action-btn full-width"
-                  disabled={exportConfig.isExporting}
+                  disabled={exportConfig.isExporting || workspaceMode === '2d'}
                   onClick={() => handleExport3D('jpg')}
                 >
                   ⬇ Export 3D Mockup JPG ({exportConfig.resolution})
@@ -897,7 +907,7 @@ export default function Sidebar({
                 <button
                   type="button"
                   className="sidebar-action-btn full-width"
-                  disabled={exportConfig.isExporting}
+                  disabled={exportConfig.isExporting || workspaceMode === '2d'}
                   onClick={() => handleExport3D('video')}
                 >
                   🎬 Export Video Animasi 3D (WebM/MP4 · 4 dtk)
@@ -905,7 +915,7 @@ export default function Sidebar({
                 <button
                   type="button"
                   className="sidebar-action-btn full-width"
-                  disabled={exportConfig.isExporting}
+                  disabled={exportConfig.isExporting || workspaceMode === '2d'}
                   onClick={() => handleExport3D('glb')}
                 >
                   📦 Export Objek 3D (.GLB Binary)
