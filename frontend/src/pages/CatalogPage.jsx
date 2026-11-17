@@ -145,12 +145,6 @@ export default function CatalogPage() {
           </button>
           <button
             type="button"
-            className={`filter-pill ${selectedCategory === 'oversized' ? 'active' : ''}`}
-            onClick={() => setSelectedCategory('oversized')}
-          >
-          </button>
-          <button
-            type="button"
             className={`filter-pill ${selectedCategory === 'hoodie' ? 'active' : ''}`}
             onClick={() => setSelectedCategory('hoodie')}
           >
