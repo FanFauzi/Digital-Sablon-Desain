@@ -179,6 +179,8 @@ GitHub Actions menjalankan pemeriksaan frontend dan backend tersebut serta memva
 
 ## Catatan penting untuk finalisasi
 
+Gunakan [TEST-PLAN.md](./TEST-PLAN.md) sebagai prosedur pencatatan uji manual, uji Gemini live, metrik evaluasi rekomendasi AI, dan verifikasi file produksi.
+
 1. Jalankan skenario browser dari [FINAL-ACCEPTANCE-CHECKLIST.md](./FINAL-ACCEPTANCE-CHECKLIST.md), terutama pergantian sisi, preset, save/load antarproyek, dan ekspor 300 DPI.
 2. Periksa file PNG hasil ekspor dengan aplikasi pembaca metadata; cocokkan dimensi piksel, metadata pHYs/DPI, transparansi, dan ukuran fisik yang diminta. Metadata 300 DPI tidak menggantikan validasi kualitas gambar sumber.
 3. Lakukan uji langsung Gemini setelah API key, model, dan kuota aktif. Catat waktu respons, status HTTP, keberhasilan parsing rekomendasi, dan perilaku saat 429/503/timeout.
