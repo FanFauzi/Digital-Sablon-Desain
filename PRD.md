@@ -7,7 +7,7 @@
 | Nama Produk | Digital Sablon Studio |
 | Jenis Produk | Web Application |
 | Versi Dokumen | 1.0 |
-| Tanggal | 10 November 2026 |
+| Tanggal | 17 November 2026 |
 | Status Dokumen | Draft – Berdasarkan implementasi berjalan |
 | Platform | Web Desktop dan Responsive Web |
 | Repository | FanFauzi/Digital-Sablon-Desain |
@@ -17,7 +17,7 @@
 | Database | MySQL / MariaDB |
 | Canvas Engine | Fabric.js 7 |
 | 3D Rendering | Three.js + React Three Fiber |
-| AI Integration | Google Gemini API (ditunda sementara) |
+| AI Integration | Google Gemini API (backend terintegrasi; validasi live dan kualitas rekomendasi pending) |
 
 ---
 
@@ -29,9 +29,9 @@ Digital Sablon Studio merupakan aplikasi berbasis web yang dirancang untuk memba
 
 Dalam proses pemesanan produk sablon secara konensional, pengguna sering kali harus membuat desain terlebih dahulu menggunakan aplikasi desain terpisah atau menyampaikan instruksi penempatan desain kepada penyedia jasa sablon. Proses tersebut dapat menimbulkan kesulitan dalam memperkirakan ukuran, posisi, warna, dan tampilan akhir desain pada pakaian.
 
-Digital Sablon Studio dikembangkan untuk menyederhanakan proses tersebut melalui integrasi editor desain, visualisasi produk 3D, dan kemampuan penyimpanan proyek. Pengguna dapat membuat desain pada area kerja yang telah disesuaikan dengan area cetak produk, melihat hasil penerapan desain pada tampilan depan maupun belakang pakaian, serta mengekspor hasil desain dengan metadata resolusi untuk kebutuhan produksi.
+Digital Sablon Studio dikembangkan untuk menyederhanakan proses tersebut melalui integrasi editor desain 2D, visualisasi pakaian 3D, dan penyimpanan proyek berbasis akun. Pengguna dapat membuat desain, mengelola permukaan depan, belakang, lengan kiri, dan lengan kanan, melihat penerapan desain pada model 3D, serta mengekspor PNG dengan metadata DPI. Dimensi dan rasio akhir tetap perlu diverifikasi terhadap ukuran produksi fisik dan karakteristik model pakaian.
 
-Aplikasi ini juga dirancang untuk dikembangkan dengan teknologi AI multimodal. AI diharapkan dapat menganalisis gambar desain yang diunggah dan menghasilkan rekomendasi penempatan desain, warna pakaian, serta metode sablon yang sesuai. Fitur AI merupakan bagian dari arah pengembangan produk, tetapi implementasi dan validasinya masih ditunda sementara.
+Aplikasi mengintegrasikan endpoint analisis gambar berbasis Gemini untuk membaca karakteristik desain dan menghasilkan rekomendasi penempatan pada permukaan yang sedang aktif. Endpoint dilindungi autentikasi dan pembatasan permintaan, dengan fallback model yang memiliki batas waktu total. Namun, keberhasilan layanan Gemini secara live, kestabilan kuota, kualitas hasil, dan kesesuaian rekomendasi belum dinyatakan tervalidasi; hal-hal tersebut memerlukan pengujian dengan API key dan data uji sebenarnya.
 
 ## 1.2 Tujuan Produk
 
@@ -76,7 +76,7 @@ Digital Sablon Studio mencakup fitur-fitur berikut:
 | MOD-05 | Design Editor | Editor desain berbasis Fabric.js |
 | MOD-06 | Layer Management | Pengelolaan objek desain |
 | MOD-07 | 3D Preview | Visualisasi desain pada produk tiga dimensi |
-| MOD-08 | Front/Back Design | Pengelolaan desain depan dan belakang secara terpisah |
+| MOD-08 | Multi-Side Design | Pengelolaan desain depan, belakang, lengan kiri, dan lengan kanan secara terpisah |
 | MOD-09 | Print Area Management | Penyesuaian area cetak dan dimensi fisik |
 | MOD-10 | Design Export | Ekspor desain PNG dengan metadata DPI |
 | MOD-11 | Project Management | Penyimpanan, pembukaan, dan penghapusan proyek |
@@ -161,7 +161,7 @@ Alur kerja desain yang menjadi konsep utama:
 
 **UPLOAD IMAGE → PILIH T-SHIRT → AI ANALYSIS → RECOMMEND POSITION → 3D T-SHIRT → EDIT DESIGN → DOWNLOAD**
 
-Pada versi implementasi yang berjalan, proses AI Analysis dan Recommend Position masih berstatus ditunda. Alur operasional yang sudah tersedia berfokus pada upload, pemilihan produk, editing, preview 3D, penyimpanan, dan ekspor.
+Pada versi implementasi yang berjalan, endpoint AI Analysis dan Recommend Position telah diintegrasikan dan diuji menggunakan respons provider tiruan untuk skenario sukses, fallback, serta pembatasan sisi aktif. Pengujian live terhadap provider Gemini dan evaluasi kualitas rekomendasi pada dataset penelitian masih menjadi gerbang terpisah. Alur operasional mencakup upload, pemilihan produk, analisis/rekomendasi AI, editing, preview 3D, penyimpanan, dan ekspor.
 
 ---
 
@@ -264,7 +264,7 @@ Sistem menyediakan pengaturan produk sebelum dan selama proses desain.
 Pengaturan:
 - Warna pakaian.
 - Ukuran pakaian.
-- Sisi desain depan atau belakang.
+- Sisi desain depan, belakang, lengan kiri, atau lengan kanan.
 
 Kriteria penerimaan:
 - Pilihan warna berasal dari varian produk.
@@ -286,7 +286,7 @@ Spesifikasi:
 
 **FR-010 – Upload Image**
 
-Pengguna dapat mengunggah gambar desain dalam format PNG dan JPG/JPEG.
+Pengguna dapat mengunggah gambar desain dalam format PNG, JPG/JPEG, dan WEBP, dengan batas ukuran aplikasi 15 MB.
 
 Kriteria penerimaan:
 - Sistem menerima file dengan format yang didukung.
@@ -339,14 +339,14 @@ Kriteria penerimaan:
 
 **FR-015 – Pemisahan Canvas Depan dan Belakang**
 
-Sistem harus menyimpan kondisi desain depan dan belakang secara terpisah.
+Sistem harus menyimpan kondisi desain pada setiap permukaan cetak secara terpisah: depan, belakang, lengan kiri, dan lengan kanan.
 
 Kriteria penerimaan:
-- Desain depan tidak tercampur dengan desain belakang.
-- Pengguna dapat berpindah sisi.
+- Desain antarpermukaan tidak tercampur.
+- Pengguna dapat berpindah antara depan, belakang, lengan kiri, dan lengan kanan.
 - Setiap sisi memiliki snapshot canvas sendiri.
 - Perpindahan sisi mempertahankan desain sebelumnya.
-- Sistem mendukung pemulihan data desain versi multi-side.
+- Sistem mendukung pemulihan snapshot multi-side dan kompatibilitas proyek legacy.
 
 Format penyimpanan editor versi 2:
 
@@ -354,6 +354,8 @@ Format penyimpanan editor versi 2:
 - `activeSide`
 - `sides.front`
 - `sides.back`
+- `sides.left_sleeve`
+- `sides.right_sleeve`
 
 Sistem juga mempertahankan kompatibilitas terhadap format proyek lama yang hanya memiliki satu snapshot canvas.
 
@@ -375,7 +377,7 @@ Kriteria penerimaan:
 - Pergantian sisi memperbarui tampilan desain.
 - Desain belakang dapat terlihat pada sisi belakang model.
 
-Catatan implementasi: model produk saat ini menggunakan pendekatan procedural/extruded geometry, bukan aset model `.glb` yang telah disediakan.
+Aset model bawaan menggunakan tiga file GLB teroptimasi: `tshirt-regular.glb`, `tshirt-oversized.glb`, dan `hoodie-classic.glb`. Model diproses untuk menghasilkan permukaan cetak depan, belakang, lengan kiri, dan lengan kanan. GitHub Actions memvalidasi header GLB v2, struktur JSON, batas ukuran 1 MiB, dan lima mesh wajib pada setiap model.
 
 ## 5.8 Print Area dan Dimensi Produksi
 
@@ -436,8 +438,7 @@ Data proyek:
 - Warna.
 - Ukuran.
 - Sisi aktif.
-- Snapshot desain depan.
-- Snapshot desain belakang.
+- Snapshot desain depan, belakang, lengan kiri, dan lengan kanan.
 
 **FR-021 – Load Project**
 
@@ -472,7 +473,7 @@ Kriteria penerimaan:
 
 **FR-024 – Analisis Gambar Desain**
 
-Sistem direncanakan menggunakan Gemini API untuk menganalisis gambar yang diunggah pengguna.
+Sistem menggunakan endpoint backend yang mengirim gambar ke Gemini API untuk dianalisis. API key disimpan di environment backend dan tidak boleh diekspos ke bundle frontend.
 
 Informasi yang diharapkan:
 - Karakteristik visual desain.
@@ -483,25 +484,18 @@ Informasi yang diharapkan:
 
 **FR-025 – Rekomendasi Penempatan Desain**
 
-Sistem diharapkan menghasilkan rekomendasi:
-- Penempatan depan.
-- Penempatan belakang.
-- Posisi tengah.
-- Posisi dada kiri.
-- Posisi punggung.
-- Ukuran relatif desain.
-- Rekomendasi warna pakaian.
-- Rekomendasi metode sablon.
+Sistem menghasilkan rekomendasi penempatan pada permukaan yang sedang aktif, termasuk koordinat X/Y dan lebar relatif desain. Rekomendasi tidak boleh diterapkan pada sisi yang berbeda dari canvas aktif. Dukungan dan kualitas rekomendasi warna atau metode sablon perlu dinilai sebagai bagian dari evaluasi keluaran AI dan tidak boleh diasumsikan akurat tanpa ground truth.
 
 **FR-026 – Warning dan Explanation**
 
 Sistem diharapkan memberikan peringatan jika gambar memiliki karakteristik yang berpotensi kurang sesuai untuk proses sablon.
 
 Catatan status:
-- Integrasi Gemini pernah dikembangkan.
-- Pengujian mengalami HTTP 413, timeout, dan respons 503.
-- Fitur AI saat ini ditunda sesuai keputusan pengembangan.
-- Hasil rekomendasi belum dapat dinyatakan valid atau siap digunakan.
+- Endpoint analisis Gemini tersedia, dilindungi `auth:sanctum`, dan dibatasi tiga permintaan per menit.
+- Fallback model memiliki anggaran waktu total sekitar 25 detik untuk mencegah rangkaian timeout melampaui batas eksekusi PHP.
+- Tes otomatis menggunakan HTTP fake untuk menguji rekomendasi sisi lengan dan fallback saat provider mengembalikan 503; tes tersebut tidak mengonsumsi kuota Gemini live.
+- Pengujian live tetap diperlukan untuk memverifikasi model, API key, kuota, payload gambar, latensi, dan pesan kesalahan provider.
+- Kualitas rekomendasi belum dinyatakan valid sampai diuji pada dataset, dibandingkan dengan ground truth, dan dievaluasi menggunakan metrik penelitian.
 
 ---
 
@@ -693,8 +687,8 @@ Struktur multi-side:
 | FR-012 | Object Transformation | Selesai |
 | FR-013 | Layer Management | Selesai |
 | FR-014 | Print Area Boundary | Selesai |
-| FR-015 | Pemisahan Front/Back | Selesai |
-| FR-016 | 3D Preview (Simultan Depan & Belakang) | Selesai |
+| FR-015 | Pemisahan Multi-Side (Depan/Belakang/Lengan) | Implementasi dan tes otomatis tersedia; uji visual manual pending |
+| FR-016 | 3D Preview (Regular/Oversized/Hoodie dan empat permukaan cetak) | Implementasi tersedia; uji visual manual pending |
 | FR-017 | Print Area Dimension | Selesai |
 | FR-018 | Export PNG dengan DPI (Tanpa Garis Batas) | Selesai |
 | FR-019 | Export Validation | Selesai |
@@ -702,9 +696,9 @@ Struktur multi-side:
 | FR-021 | Load Project | Selesai |
 | FR-022 | Delete Project | Selesai |
 | FR-023 | Cloud Project Storage (`uploaded_assets`) | Selesai |
-| FR-024 | AI Design Analysis (Gemini Multimodal) | Selesai |
-| FR-025 | AI Placement & Color Recommendation (Auto-Apply + Multi-Option) | Selesai |
-| FR-026 | AI Warning & Explanation | Selesai |
+| FR-024 | AI Design Analysis (Gemini Multimodal) | Endpoint dan tes otomatis tersedia; validasi live pending |
+| FR-025 | AI Placement Recommendation (Active-Side Aware) | Implementasi dan tes otomatis tersedia; evaluasi kualitas pending |
+| FR-026 | AI Warning & Explanation | Perlu diverifikasi terhadap keluaran dan rubrik uji; belum dinyatakan final |
 
 ---
 
@@ -714,8 +708,10 @@ Struktur multi-side:
    - Gambar tidak lagi disimpan sebagai string Base64 di dalam JSON `editor_state`, melainkan diunggah ke disk melalui `POST /api/v1/assets` dan disimpan pada tabel `uploaded_assets`.
 2. **Garis Putus-Putus pada Hasil Ekspor PNG (Diselesaikan):**
    - Objek batas area cetak (`isPrintBoundary`) disembunyikan sementara (`visible = false`) selama proses `canvas.toDataURL()` untuk ekspor PNG maupun tekstur 3D preview.
-3. **Kestabilan & Akurasi Rekomendasi Penempatan AI (Diselesaikan pada P2):**
-   - Menggunakan rantai fallback model `gemini-3.8-flash` → `gemini-3.6-flash` → `gemini-3.5-flash-lite`, kompresi gambar sisi klien maks 1024px, zona preset terkalibrasi (`left_chest`, `center_chest`, `full_front`, `upper_back`, `back_center`, `bottom_left`), penerapan otomatis ke kanvas, serta 3 opsi posisi interaktif.
+3. **Keandalan endpoint AI dan pembatasan rekomendasi (implementasi backend tersedia):**
+   - Endpoint memakai autentikasi, rate limit, validasi kepemilikan proyek/aset, cache berdasarkan editor/sisi/jenis pakaian/warna, fallback model, dan anggaran waktu total sekitar 25 detik.
+   - Normalisasi menjaga rekomendasi tetap pada sisi aktif, termasuk lengan kiri/kanan. Tes otomatis memverifikasi fallback 503 serta hasil untuk sisi lengan.
+   - Akurasi rekomendasi belum dibuktikan secara ilmiah atau operasional; evaluasi live dan pengukuran terhadap ground truth masih diperlukan.
 4. **Normalisasi Tabel Pendukung Database (Diselesaikan pada P3):**
    - Tabel `design_objects`, `ai_analysis_runs`, `ai_recommendations`, dan `export_files` telah terhubung dengan model Eloquent dan disinkronkan secara otomatis dari alur kerja editor.
 
@@ -733,11 +729,12 @@ Struktur multi-side:
 - Kustomisasi penuh properti teks (isi teks, jenis font, ukuran font, ketebalan, dan warna teks) pada panel Properties.
 - Konfigurasi masa berlaku token Sanctum (`SANCTUM_TOKEN_EXPIRATION`).
 
-## P2 – Penyelesaian Fitur AI Multimodal (Selesai)
-- Kestabilan koneksi Gemini API dengan model fallback dan kompresi ukuran gambar sebelum dikirim ke endpoint analisis.
-- Penerapan otomatis hasil rekomendasi penempatan AI ke koordinat canvas serta penyediaan 3 opsi posisi alternatif dan rekomendasi warna kaos interaktif.
+## P2 – Integrasi AI Multimodal (Implementasi endpoint tersedia; evaluasi pending)
+- Endpoint analisis Gemini, autentikasi, rate limit, validasi kepemilikan aset/proyek, fallback model, dan batas waktu total telah diimplementasikan.
+- Rekomendasi penempatan dinormalisasi agar tetap berada pada permukaan aktif dan diuji menggunakan respons provider tiruan.
+- Pengujian live Gemini, pengukuran latensi, evaluasi kualitas rekomendasi, dan perbandingan terhadap ground truth belum selesai.
 
 ## P3 – Pengembangan Lanjutan (Selesai)
 - Pemanfaatan tabel `design_objects`, `export_files`, `ai_analysis_runs`, dan `ai_recommendations`.
-- Render tekstur depan dan belakang secara simultan pada model pakaian 3D sehingga kedua sisi terlihat saat model diputar 360°.
+- Render tekstur depan, belakang, lengan kiri, dan lengan kanan secara simultan pada model pakaian 3D sehingga desain tetap mengikuti permukaan terkait ketika model diputar.
 
