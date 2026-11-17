@@ -79,24 +79,21 @@ export default function HomePage() {
           <div className="hero-visual-card">
             <div className="hero-visual-inner">
               <div className="hero-card-header">
-                <span className="spec-tag">REF: ARCHIVE-002</span>
+                <span className="spec-tag">REF: ARCHIVE-001</span>
                 <span className="spec-tag highlight">
-                  <Sparkles size={11} /> HEAVYWEIGHT 240 GSM
+                  <Sparkles size={11} /> COMBED 24S · 190 GSM
                 </span>
               </div>
 
               <div className="hero-garment-stage">
-                <GarmentVisual
-                  type="oversized"
-                  name="Oversized Boxy Tee"
-                  color="#20211F"
-                  className="hero-garment-svg"
-                />
+                <div style={{ position: 'absolute', inset: 0 }}>
+                  <GarmentModelPreview modelPath="/models/Tshirt.glb" />
+                </div>
 
                 {/* Editorial Callout Badges */}
                 <div className="garment-callout callout-shoulder">
                   <span className="callout-dot" />
-                  <span className="callout-text">Drop Shoulder Construction</span>
+                  <span className="callout-text">Regular Fit Construction</span>
                 </div>
 
                 <div className="garment-callout callout-chest">
