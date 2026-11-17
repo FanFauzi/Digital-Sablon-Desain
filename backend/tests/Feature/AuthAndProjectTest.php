@@ -306,6 +306,11 @@ class AuthAndProjectTest extends TestCase
         ]);
     }
 
+    public function test_design_analysis_endpoint_requires_authentication(): void
+    {
+        $this->postJson('/api/v1/designs/analyze', [])->assertUnauthorized();
+    }
+
     public function test_project_endpoints_require_authentication(): void
     {
         $this->getJson('/api/v1/projects')->assertUnauthorized();
