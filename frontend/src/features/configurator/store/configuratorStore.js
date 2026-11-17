@@ -3,18 +3,14 @@ import { create } from 'zustand'
 export const GARMENT_MODELS = [
   {
     id: 'regular',
-    name: 'Regular T-Shirt (FBX)',
-    label: 'Regular T-Shirt (FBX)',
-    fitLabel: 'T SHIRT.fbx · Regular Fit',
+    name: 'Regular T-Shirt (GLB)',
+    label: 'Regular T-Shirt (GLB)',
+    fitLabel: 'tshirt-regular.glb · Regular Fit',
     type: 'tshirt',
-    modelPath: '/models/T SHIRT.fbx',
-    candidatePaths: [
-      '/models/T SHIRT.fbx',
-      '/models/t-shirt.fbx',
-      '/models/tshirt-regular.glb',
-    ],
+    modelPath: '/models/tshirt-regular.glb',
+    candidatePaths: ['/models/tshirt-regular.glb'],
     fallbackPath: '/models/tshirt-regular.glb',
-    description: 'Model 3D T SHIRT.fbx untuk kaos regular fit dengan tekstur & kontur lipatan kain realistis.',
+    description: 'Model GLB regular fit yang dioptimalkan dengan permukaan cetak depan, belakang, dan lengan.',
   },
   {
     id: 'oversized',
