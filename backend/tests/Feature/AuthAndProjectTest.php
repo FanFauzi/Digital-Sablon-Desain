@@ -8,6 +8,7 @@ use App\Models\Shirt;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -461,6 +462,67 @@ class AuthAndProjectTest extends TestCase
                 ->assertJsonPath('data.recommendations.placement_options.0.side', $side)
                 ->assertJsonCount(1, 'data.recommendations.placement_options');
         }
+    }
+
+    public function test_design_analysis_falls_back_to_the_next_model_after_provider_overload(): void
+    {
+        $user = User::factory()->create();
+        config([
+            'services.gemini.api_key' => 'test-gemini-key',
+            'services.gemini.model' => 'gemini-3.8-flash',
+        ]);
+
+        $successResponse = [
+            'candidates' => [[
+                'content' => [
+                    'parts' => [[
+                        'text' => json_encode([
+                            'summary' => 'Logo sederhana untuk kaos.',
+                            'composition' => ['complexity' => 'simple'],
+                            'recommendations' => [
+                                'placement' => [
+                                    'position_code' => 'center_chest',
+                                    'side' => 'front',
+                                    'area' => 'Dada Tengah',
+                                    'scale_category' => 'medium',
+                                    'position_x_percent' => 50,
+                                    'position_y_percent' => 32,
+                                    'width_percent' => 55,
+                                    'reason' => 'Proporsional untuk area dada.',
+                                ],
+                                'placement_options' => [],
+                            ],
+                        ], JSON_THROW_ON_ERROR),
+                    ]],
+                ],
+            ]],
+        ];
+
+        $sequence = Http::sequence()
+            ->push(['error' => ['message' => 'The model is currently overloaded.']], 503)
+            ->push($successResponse, 200);
+
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => $sequence,
+        ]);
+
+        $this->actingAs($user, 'sanctum')
+            ->post('/api/v1/designs/analyze', [
+                'image' => UploadedFile::fake()->image('fallback-test.png', 32, 32),
+                'current_side' => 'front',
+            ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('data.recommendations.placement.side', 'front');
+
+        Http::assertSentCount(2);
+        Http::assertSent(fn (HttpRequest $request) => str_contains(
+            $request->url(),
+            'models/gemini-3.8-flash:generateContent'
+        ));
+        Http::assertSent(fn (HttpRequest $request) => str_contains(
+            $request->url(),
+            'models/gemini-3.6-flash:generateContent'
+        ));
     }
 
     public function test_design_analysis_rejects_project_and_asset_ids_owned_by_another_user(): void
