@@ -1326,16 +1326,21 @@ export default function useDesignEditor(canvasElement) {
     }
 
     let placement = customPlacement || analysis?.recommendations?.placement
-    if (customPlacement && customPlacement.placementZone && !customPlacement.width_percent) {
-      const preset = PRINT_PLACEMENT_PRESETS.find((p) => p.id === customPlacement.placementZone)
-      if (preset) {
-        placement = {
-          area: preset.side,
-          position_code: preset.id,
-          position_x_percent: preset.xPercent,
-          position_y_percent: preset.yPercent,
-          width_percent: preset.widthPercent,
-        }
+    if (customPlacement?.placementZone && !customPlacement.width_percent) {
+      const preset = PRINT_PLACEMENT_PRESETS.find(
+        (item) => item.id === customPlacement.placementZone
+      )
+
+      if (!preset) {
+        throw new Error('Preset penempatan desain tidak dikenali.')
+      }
+
+      placement = {
+        area: preset.side,
+        position_code: preset.code || preset.id,
+        position_x_percent: preset.position_x_percent,
+        position_y_percent: preset.position_y_percent,
+        width_percent: preset.width_percent,
       }
     }
 
