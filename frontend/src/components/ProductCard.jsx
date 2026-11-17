@@ -43,7 +43,33 @@ export default function ProductCard({ product }) {
         aria-label={`Kustomisasi ${product.name}`}
       >
         <div className="product-image">
-          {image ? (
+          {isHoodie ? (
+            <div
+              className="product-sketchfab-preview"
+              style={{
+                position: 'absolute',
+                inset: 0,
+                overflow: 'hidden',
+                background: '#e9e9e5',
+              }}
+            >
+              <iframe
+                title="Oversized Hoodie 2 — 3D preview"
+                src="https://sketchfab.com/models/bf64214795a04b47a47c4fa29dfe458c/embed?autostart=0&ui_theme=light"
+                allow="autoplay; fullscreen; xr-spatial-tracking"
+                allowFullScreen
+                loading="lazy"
+                referrerPolicy="strict-origin-when-cross-origin"
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  height: '100%',
+                  minHeight: 280,
+                  border: 0,
+                }}
+              />
+            </div>
+          ) : image ? (
             <img src={image} alt={product.name} loading="lazy" />
           ) : (
             <div className="product-visual-wrapper">
@@ -82,6 +108,30 @@ export default function ProductCard({ product }) {
             {product?.description ||
               'Kain katun premium dengan daya serap tinta sablon maksimal dan konstruksi jahitan ganda.'}
           </p>
+          {isHoodie && (
+            <p className="product-model-credit" style={{ fontSize: 11, color: '#777', marginTop: 8 }}>
+              Model 3D oleh{' '}
+              <a
+                href="https://sketchfab.com/najdmie"
+                target="_blank"
+                rel="noreferrer noopener"
+                onClick={(event) => event.stopPropagation()}
+                style={{ color: 'inherit', textDecoration: 'underline' }}
+              >
+                najdmie
+              </a>
+              {' · '}
+              <a
+                href="https://sketchfab.com/3d-models/oversized-hoodie-2-bf64214795a04b47a47c4fa29dfe458c"
+                target="_blank"
+                rel="noreferrer noopener"
+                onClick={(event) => event.stopPropagation()}
+                style={{ color: 'inherit', textDecoration: 'underline' }}
+              >
+                Sketchfab
+              </a>
+            </p>
+          )}
         </div>
 
         {/* Color preview dots */}
