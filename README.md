@@ -154,7 +154,7 @@ composer install
 php artisan test
 ```
 
-GitHub Actions menjalankan pemeriksaan frontend dan backend tersebut serta memvalidasi ukuran, header, struktur JSON, dan lima mesh wajib pada model oversized.
+GitHub Actions menjalankan pemeriksaan frontend dan backend tersebut serta memvalidasi ukuran maksimal 1 MiB, header GLB v2, struktur JSON, dan lima mesh wajib pada seluruh model regular, oversized, dan hoodie.
 
 ## Catatan penting untuk finalisasi
 
