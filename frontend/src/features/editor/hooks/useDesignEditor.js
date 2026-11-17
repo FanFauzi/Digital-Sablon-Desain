@@ -938,12 +938,10 @@ export default function useDesignEditor(canvasElement) {
         const existingMeta = imageAssetsRef.current.get(editorId) || null
         const assetId = extractAssetId(object) || existingMeta?.uploadedAssetId || null
 
-        if (existingMeta?.objectUrl) {
-          if (assetId && !existingMeta.uploadedAssetId) {
-            existingMeta.uploadedAssetId = assetId
-            existingMeta.assetUrl = buildAssetContentPath(assetId)
-          }
+        const existingAssetMatches =
+          !assetId || Number(existingMeta?.uploadedAssetId) === Number(assetId)
 
+        if (existingMeta?.objectUrl && existingAssetMatches) {
           return {
             ...object,
             editorId,
@@ -1189,6 +1187,21 @@ export default function useDesignEditor(canvasElement) {
 
     const validSides = ['front', 'back', 'left_sleeve', 'right_sleeve']
     const requestedSide = validSides.includes(preferredSide) ? preferredSide : 'front'
+
+    // Cache lokal per editorId tidak boleh membawa gambar dari proyek yang
+    // sebelumnya dibuka, terutama ketika dua proyek memiliki editorId yang sama.
+    imageAssetsRef.current.clear()
+    analysisCacheRef.current.clear()
+    lastAnalyzedObjectIdRef.current = null
+    setAnalysis(null)
+    setAnalysisError('')
+    setDesignPreview(null)
+    setSidePreviews({
+      front: null,
+      back: null,
+      left_sleeve: null,
+      right_sleeve: null,
+    })
 
     if (isMultiSideSnapshot) {
       sideSnapshotsRef.current = {
