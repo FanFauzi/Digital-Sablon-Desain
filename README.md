@@ -59,6 +59,27 @@ Aplikasi web untuk kustomisasi desain kaos dan hoodie: editor 2D berbasis Fabric
 - SQLite (default) atau MySQL/MariaDB.
 - Browser modern dengan WebGL aktif untuk preview 3D.
 
+## Konfigurasi PHP untuk upload desain
+
+Frontend dan backend membatasi unggahan desain hingga 15 MB. Pastikan batas PHP lebih besar dari batas aplikasi agar request multipart tidak ditolak sebelum mencapai Laravel.
+
+Periksa file konfigurasi PHP CLI yang digunakan oleh `php artisan serve`:
+
+```powershell
+php --ini
+php -i | findstr /I "upload_max_filesize post_max_size memory_limit"
+```
+
+Pada file `php.ini` yang ditampilkan, gunakan sekurang-kurangnya:
+
+```ini
+upload_max_filesize=20M
+post_max_size=24M
+memory_limit=256M
+```
+
+Simpan perubahan dan restart proses PHP/Laravel. Untuk Apache/XAMPP, pastikan konfigurasi pada PHP yang digunakan Apache juga disesuaikan.
+
 ## Menjalankan aplikasi di Windows (PowerShell)
 
 ### 1. Clone repository dan pilih branch kerja
