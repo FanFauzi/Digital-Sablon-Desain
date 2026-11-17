@@ -348,9 +348,8 @@ export default function EditorPage() {
   }
 
   const handleSideChange = async (nextSide) => {
-    if (!shirt) return false
+    if (!shirt || isSwitchingSide || projectBusy) return false
     if (nextSide === selectedSide) return true
-    if (isSwitchingSide || projectBusy) return false
 
     const nextPrintArea =
       shirt.print_areas?.find((area) => area.view_side === nextSide) ||
