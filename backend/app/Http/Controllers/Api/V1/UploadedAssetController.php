@@ -28,8 +28,8 @@ class UploadedAssetController extends Controller
             ],
         ], [
             'image.required' => 'File gambar wajib diunggah.',
-            'image.mimes' => 'Format gambar harus PNG atau JPG/JPEG.',
-            'image.mimetypes' => 'Format gambar harus PNG atau JPG/JPEG.',
+            'image.mimes' => 'Format gambar harus PNG, JPG/JPEG, atau WEBP.',
+            'image.mimetypes' => 'Format gambar harus PNG, JPG/JPEG, atau WEBP.',
             'image.max' => 'Ukuran gambar maksimal 15 MB.',
         ]);
 
@@ -46,7 +46,7 @@ class UploadedAssetController extends Controller
         $mimeType = $imageInfo['mime'] ?? $file->getMimeType() ?? 'image/png';
         if (! in_array($mimeType, ['image/png', 'image/jpeg', 'image/webp'], true)) {
             throw ValidationException::withMessages([
-                'image' => ['Format gambar harus PNG atau JPG/JPEG.'],
+                'image' => ['Format gambar harus PNG, JPG/JPEG, atau WEBP.'],
             ]);
         }
 
