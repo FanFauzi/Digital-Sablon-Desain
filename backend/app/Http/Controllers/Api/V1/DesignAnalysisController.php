@@ -77,6 +77,24 @@ class DesignAnalysisController extends Controller
             'position_y_percent' => 80,
             'width_percent' => 26,
         ],
+        'left_sleeve' => [
+            'position_code' => 'left_sleeve',
+            'side' => 'left_sleeve',
+            'area' => 'Lengan Kiri',
+            'scale_category' => 'small',
+            'position_x_percent' => 50,
+            'position_y_percent' => 48,
+            'width_percent' => 55,
+        ],
+        'right_sleeve' => [
+            'position_code' => 'right_sleeve',
+            'side' => 'right_sleeve',
+            'area' => 'Lengan Kanan',
+            'scale_category' => 'small',
+            'position_x_percent' => 50,
+            'position_y_percent' => 48,
+            'width_percent' => 55,
+        ],
     ];
 
     public function analyze(Request $request): JsonResponse
@@ -87,7 +105,7 @@ class DesignAnalysisController extends Controller
         $validated = $request->validate([
             'image' => ['required', 'file', 'image', 'mimes:png,jpg,jpeg,webp', 'max:10240'],
             'shirt_type' => ['nullable', 'string', 'max:40'],
-            'current_side' => ['nullable', 'string', 'in:front,back'],
+            'current_side' => ['nullable', 'string', 'in:front,back,left_sleeve,right_sleeve'],
             'current_color' => ['nullable', 'string', 'max:32'],
             'project_id' => [
                 'nullable',
@@ -139,7 +157,7 @@ Analyze the uploaded artwork image carefully and recommend the most visually pro
 
 Context:
 - Product type: {$shirtType}
-- Active canvas side: {$currentSide}
+- Active canvas side: {$currentSide} (front, back, left_sleeve, or right_sleeve)
 - Current garment color: {$currentColor}
 - Uploaded image dimensions: {$imgWidth}x{$imgHeight} px (aspect ratio: {$aspectRatio})
 
@@ -155,6 +173,8 @@ Available placement position_code presets:
 4. "upper_back" -> small back collar/yoke logo or label (side: "back", X: 50, Y: 16-22, width: 30-38)
 5. "back_center" -> large street-style back artwork/poster graphic (side: "back", X: 50, Y: 44-48, width: 75-84)
 6. "bottom_left" -> small lower hem tag/stamp graphic (side: "front", X: 72, Y: 78-82, width: 24-30)
+7. "left_sleeve" -> small sleeve graphic on the left sleeve print surface (side: "left_sleeve", X: 50, Y: 48, width: 45-60)
+8. "right_sleeve" -> small sleeve graphic on the right sleeve print surface (side: "right_sleeve", X: 50, Y: 48, width: 45-60)
 
 Return one valid JSON object, without markdown fences, using this exact schema:
 {
@@ -169,8 +189,8 @@ Return one valid JSON object, without markdown fences, using this exact schema:
   "recommendations": {
     "shirt_colors": [{"name": "nama warna kaos", "hex": "#RRGGBB", "reason": "alasan kontras dalam bahasa Indonesia"}],
     "placement": {
-      "position_code": "choose best preset code from: left_chest, center_chest, full_front, upper_back, back_center, bottom_left",
-      "side": "front or back",
+      "position_code": "choose a preset compatible with the active canvas side",
+      "side": "must exactly match the active canvas side: front, back, left_sleeve, or right_sleeve",
       "area": "nama area penempatan dalam bahasa Indonesia",
       "scale_category": "small | medium | large",
       "position_x_percent": "<integer tailored to the chosen zone>",
@@ -180,8 +200,8 @@ Return one valid JSON object, without markdown fences, using this exact schema:
     },
     "placement_options": [
       {
-        "position_code": "primary preset code",
-        "side": "front or back",
+        "position_code": "a preset compatible with the active canvas side",
+        "side": "must exactly match the active canvas side",
         "area": "nama area",
         "scale_category": "small | medium | large",
         "position_x_percent": "<integer>",
@@ -204,7 +224,8 @@ Return one valid JSON object, without markdown fences, using this exact schema:
 
 Rules:
 - NEVER output generic placeholder numbers like 50, 45, 35 together. Choose coordinates and width_percent that genuinely match the visual nature of the uploaded image (e.g., small badge/icon -> left_chest with width ~25%; wide text/logo -> center_chest with Y ~30% and width ~55%; complex artwork/poster -> full_front or back_center with width ~76-82%).
-- Provide 3 distinct items inside `placement_options` (the primary recommendation first, followed by 2 alternative placements suitable for this artwork).
+- The recommendation and every item in `placement_options` MUST target the active canvas side only. Do not recommend a different side because the user is analyzing a specific print surface.
+- For front/back surfaces, provide up to 3 distinct placement options on that same side. For sleeve surfaces, provide one suitable sleeve placement.
 - All numeric fields (`position_x_percent`, `position_y_percent`, `width_percent`, `confidence.score`) MUST be numbers, not strings.
 PROMPT;
 
@@ -227,86 +248,68 @@ PROMPT;
                 ],
             ];
 
-            // Coba model utama (3.8 Flash), lalu fallback ke 3.6 Flash dan 3.5 Flash-Lite.
+            // Batasi total percobaan: satu request per model, lalu fallback jika model sibuk/tidak tersedia.
+            // Batas waktu 22 detik per model menjaga request web tetap di bawah batas eksekusi backend.
             $modelsToTry = array_values(array_unique([
                 $configuredModel,
                 'gemini-3.8-flash',
                 'gemini-3.6-flash',
                 'gemini-3.5-flash-lite',
             ]));
-            $retryableStatuses = [429, 500, 502, 503, 504];
             $response = null;
             $usedModel = null;
             $lastConnectionError = null;
 
             foreach ($modelsToTry as $candidateModel) {
-                $response = null;
-
-                for ($attempt = 1; $attempt <= 2; $attempt++) {
-                    try {
-                        $attemptResponse = Http::acceptJson()
-                            ->when(app()->environment('local'), fn ($http) => $http->withoutVerifying())
-                            ->withHeaders(['x-goog-api-key' => $apiKey])
-                            ->connectTimeout(10)
-                            ->timeout(30)
-                            ->post(
-                                "https://generativelanguage.googleapis.com/v1beta/models/{$candidateModel}:generateContent",
-                                $payload
-                            );
-                        $response = $attemptResponse;
-                        $usedModel = $candidateModel;
-                        $lastConnectionError = null;
-                    } catch (ConnectionException $exception) {
-                        $response = null;
-                        $lastConnectionError = $exception;
-                        Log::warning('Gemini connection attempt failed.', [
-                            'model' => $candidateModel,
-                            'attempt' => $attempt,
-                            'message' => $exception->getMessage(),
-                        ]);
-
-                        if ($attempt < 2) {
-                            usleep(1000000 + random_int(0, 500000));
-                            continue;
-                        }
-
-                        // Model berikutnya akan dicoba setelah koneksi model ini gagal.
-                        break;
-                    }
-
-                    if ($response->successful()) {
-                        break 2;
-                    }
-
-                    $status = $response->status();
-                    $errorMessage = (string) ($response->json('error.message') ?? '');
-                    Log::notice('Gemini returned an error during design analysis.', [
+                try {
+                    $attemptResponse = Http::acceptJson()
+                        ->withHeaders(['x-goog-api-key' => $apiKey])
+                        ->connectTimeout(8)
+                        ->timeout(22)
+                        ->post(
+                            "https://generativelanguage.googleapis.com/v1beta/models/{$candidateModel}:generateContent",
+                            $payload
+                        );
+                    $response = $attemptResponse;
+                    $usedModel = $candidateModel;
+                    $lastConnectionError = null;
+                } catch (ConnectionException $exception) {
+                    $lastConnectionError = $exception;
+                    Log::warning('Gemini connection attempt failed.', [
                         'model' => $candidateModel,
-                        'attempt' => $attempt,
-                        'status' => $status,
-                        'body' => $errorMessage,
+                        'message' => $exception->getMessage(),
                     ]);
 
-                    // Jika API key tidak valid, hentikan lebih awal agar pengguna mendapat pesan yang jelas.
-                    if ($status === 400 && str_contains(strtolower($errorMessage), 'api key')) {
-                        break 2;
-                    }
-
-                    // Jika model tidak tersedia untuk akun ini (404 / 403 / 400 model error), coba model cadangan berikutnya.
-                    if (in_array($status, [400, 403, 404], true)) {
-                        break;
-                    }
-
-                    if (!in_array($status, $retryableStatuses, true) || $status === 429) {
-                        break 2;
-                    }
-
-                    if ($attempt < 2) {
-                        usleep(1000000 + random_int(0, 500000));
-                    }
-
-                    // Setelah dua kali gagal 5xx, lanjutkan ke model cadangan.
+                    // Lanjut ke model cadangan tanpa mengulang request yang sama.
+                    continue;
                 }
+
+                if ($response->successful()) {
+                    break;
+                }
+
+                $status = $response->status();
+                $errorMessage = (string) ($response->json('error.message') ?? '');
+                Log::notice('Gemini returned an error during design analysis.', [
+                    'model' => $candidateModel,
+                    'status' => $status,
+                    'body' => $errorMessage,
+                ]);
+
+                // Kredensial salah dan kuota habis tidak akan diselesaikan dengan mencoba model lain.
+                if (
+                    ($status === 400 && str_contains(strtolower($errorMessage), 'api key')) ||
+                    $status === 429
+                ) {
+                    break;
+                }
+
+                // Untuk 4xx terkait model dan 5xx kapasitas/provider, coba model cadangan berikutnya.
+                if (in_array($status, [400, 403, 404, 500, 502, 503, 504], true)) {
+                    continue;
+                }
+
+                break;
             }
 
             if (!$response || !$response->successful()) {
@@ -491,8 +494,13 @@ PROMPT;
             }
         }
 
-        // Lengkapi hingga 3 opsi berbeda agar pengguna bisa langsung membandingkan posisi di kanvas.
-        $fallbackOrder = ['center_chest', 'left_chest', 'full_front', 'back_center', 'upper_back'];
+        // Tambahkan alternatif yang tetap berada pada permukaan aktif.
+        $fallbackOrder = match ($currentSide) {
+            'back' => ['back_center', 'upper_back'],
+            'left_sleeve' => ['left_sleeve'],
+            'right_sleeve' => ['right_sleeve'],
+            default => ['center_chest', 'left_chest', 'full_front', 'right_chest', 'bottom_left'],
+        };
         foreach ($fallbackOrder as $fallbackCode) {
             if (count($normalizedOptions) >= 3) {
                 break;
@@ -527,6 +535,11 @@ PROMPT;
 
         if (!isset(self::PLACEMENT_PRESETS[$code])) {
             $code = $this->inferPresetCodeFromText($areaText, $complexity, $aspectRatio, $currentSide);
+        }
+
+        // Jangan izinkan AI menempatkan desain pada sisi yang berbeda dari canvas aktif.
+        if ((self::PLACEMENT_PRESETS[$code]['side'] ?? null) !== $currentSide) {
+            $code = $this->defaultPresetCodeForSide($currentSide, $complexity, $aspectRatio);
         }
 
         $preset = self::PLACEMENT_PRESETS[$code] ?? self::PLACEMENT_PRESETS['center_chest'];
@@ -578,12 +591,14 @@ PROMPT;
                 $posX = max(65, min(78, $posX === 50 ? $preset['position_x_percent'] : $posX));
                 $posY = max(72, min(84, $posY < 65 ? $preset['position_y_percent'] : $posY));
                 $width = max(20, min(32, $width));
+            } elseif ($code === 'left_sleeve' || $code === 'right_sleeve') {
+                $posX = 50;
+                $posY = max(25, min(75, $posY));
+                $width = max(35, min(70, $width));
             }
         }
 
-        $side = in_array($placement['side'] ?? '', ['front', 'back'], true)
-            ? $placement['side']
-            : $preset['side'];
+        $side = $currentSide;
 
         return [
             'position_code' => $code,
@@ -631,6 +646,14 @@ PROMPT;
             return 'center_chest';
         }
 
+        if ($currentSide === 'left_sleeve') {
+            return 'left_sleeve';
+        }
+
+        if ($currentSide === 'right_sleeve') {
+            return 'right_sleeve';
+        }
+
         if ($currentSide === 'back') {
             return $complexity === 'simple' ? 'upper_back' : 'back_center';
         }
@@ -646,6 +669,21 @@ PROMPT;
         return 'center_chest';
     }
 
+    private function defaultPresetCodeForSide(
+        string $side,
+        string $complexity,
+        float $aspectRatio
+    ): string {
+        return match ($side) {
+            'back' => $complexity === 'simple' ? 'upper_back' : 'back_center',
+            'left_sleeve' => 'left_sleeve',
+            'right_sleeve' => 'right_sleeve',
+            default => $complexity === 'simple'
+                ? 'left_chest'
+                : ($aspectRatio < 0.85 ? 'full_front' : 'center_chest'),
+        };
+    }
+
     private function defaultReasonForPreset(string $code): string
     {
         return match ($code) {
@@ -656,6 +694,8 @@ PROMPT;
             'upper_back' => 'Penempatan di punggung atas dekat kerah cocok untuk identitas brand atau aksen minimalis.',
             'back_center' => 'Area punggung tengah memberikan ruang terluas untuk karya visual berdetail tinggi.',
             'bottom_left' => 'Penempatan di sisi bawah kaos memberikan aksen streetwear modern.',
+            'left_sleeve' => 'Ukuran dan posisi disesuaikan dengan permukaan cetak lengan kiri.',
+            'right_sleeve' => 'Ukuran dan posisi disesuaikan dengan permukaan cetak lengan kanan.',
             default => 'Posisi disesuaikan secara proporsional terhadap area cetak.',
         };
     }
