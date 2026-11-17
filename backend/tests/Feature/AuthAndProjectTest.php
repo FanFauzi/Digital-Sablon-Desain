@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -381,6 +382,59 @@ class AuthAndProjectTest extends TestCase
     public function test_design_analysis_endpoint_requires_authentication(): void
     {
         $this->postJson('/api/v1/designs/analyze', [])->assertUnauthorized();
+    }
+
+    public function test_design_analysis_keeps_recommendations_on_the_active_sleeve_surface(): void
+    {
+        $user = User::factory()->create();
+        config([
+            'services.gemini.api_key' => 'test-gemini-key',
+            'services.gemini.model' => 'gemini-3.8-flash',
+        ]);
+
+        $modelResponse = [
+            'candidates' => [[
+                'content' => [
+                    'parts' => [[
+                        'text' => json_encode([
+                            'summary' => 'Logo komunitas berbentuk emblem.',
+                            'composition' => ['complexity' => 'simple'],
+                            'recommendations' => [
+                                'placement' => [
+                                    'position_code' => 'back_center',
+                                    'side' => 'back',
+                                    'area' => 'Punggung Tengah',
+                                    'scale_category' => 'large',
+                                    'position_x_percent' => 50,
+                                    'position_y_percent' => 45,
+                                    'width_percent' => 80,
+                                    'reason' => 'Tempatkan di punggung.',
+                                ],
+                                'placement_options' => [],
+                            ],
+                        ], JSON_THROW_ON_ERROR),
+                    ]],
+                ],
+            ]],
+        ];
+
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response($modelResponse, 200),
+        ]);
+
+        foreach (['left_sleeve' => 'Lengan Kiri', 'right_sleeve' => 'Lengan Kanan'] as $side => $expectedArea) {
+            $this->actingAs($user, 'sanctum')
+                ->post('/api/v1/designs/analyze', [
+                    'image' => UploadedFile::fake()->image("{$side}.png", 32, 32),
+                    'current_side' => $side,
+                ], ['Accept' => 'application/json'])
+                ->assertOk()
+                ->assertJsonPath('data.recommendations.placement.side', $side)
+                ->assertJsonPath('data.recommendations.placement.position_code', $side)
+                ->assertJsonPath('data.recommendations.placement.area', $expectedArea)
+                ->assertJsonPath('data.recommendations.placement_options.0.side', $side)
+                ->assertJsonCount(1, 'data.recommendations.placement_options');
+        }
     }
 
     public function test_design_analysis_rejects_project_and_asset_ids_owned_by_another_user(): void
