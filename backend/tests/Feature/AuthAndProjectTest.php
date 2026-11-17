@@ -433,11 +433,11 @@ class AuthAndProjectTest extends TestCase
 
         $this->getJson('/api/v1/shirts/' . $regular->id)
             ->assertOk()
-            ->assertJsonPath('data.model_3d_path', '/models/tshirt-regular.glb');
+            ->assertJsonPath('data.model_3d_path', '/models/Tshirt.glb');
 
         $this->getJson('/api/v1/shirts/' . $oversized->id)
             ->assertOk()
-            ->assertJsonPath('data.model_3d_path', '/models/tshirt-oversized.glb');
+            ->assertJsonPath('data.model_3d_path', '/models/Tshirt.glb');
     }
 
     public function test_design_analysis_endpoint_requires_authentication(): void
