@@ -7,8 +7,8 @@ Checklist ini memisahkan pemeriksaan otomatis dari uji manual yang perlu dilakuk
 - [ ] Frontend `npm test` lulus.
 - [ ] Frontend `npm run lint` lulus.
 - [ ] Frontend `npm run build` lulus.
-- [ ] Backend `php artisan test` lulus.
-- [ ] Aset GLB oversized tidak melebihi 1 MiB, dapat dibaca sebagai GLB v2, dan memiliki lima mesh permukaan yang diwajibkan.
+- [ ] Backend `php artisan test` lulus, termasuk persistensi proyek untuk empat permukaan cetak.
+- [ ] Aset GLB regular, oversized, dan hoodie masing-masing tidak melebihi 1 MiB, dapat dibaca sebagai GLB v2, dan memiliki lima mesh permukaan yang diwajibkan.
 
 ## B. Akun dan keamanan
 
