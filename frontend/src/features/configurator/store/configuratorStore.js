@@ -8,8 +8,8 @@ export const GARMENT_MODELS = [
     fitLabel: 'Tshirt.glb · Regular Fit',
     type: 'tshirt',
     modelPath: '/models/Tshirt.glb',
-    candidatePaths: ['/models/Tshirt.glb'],
-    fallbackPath: '/models/Tshirt.glb',
+    candidatePaths: ['/models/Tshirt.glb', '/models/tshirt-regular.glb'],
+    fallbackPath: '/models/tshirt-regular.glb',
     description: 'Model T-Shirt GLB untuk kustomisasi desain pada bagian depan, belakang, dan lengan.',
   },
   {
@@ -19,8 +19,8 @@ export const GARMENT_MODELS = [
     fitLabel: 'hoodie.glb · Pullover',
     type: 'hoodie',
     modelPath: '/models/hoodie.glb',
-    candidatePaths: ['/models/hoodie.glb'],
-    fallbackPath: '/models/hoodie.glb',
+    candidatePaths: ['/models/hoodie.glb', '/models/hoodie-classic.glb'],
+    fallbackPath: '/models/hoodie-classic.glb',
     description: 'Model hoodie GLB untuk kustomisasi desain pada bagian depan, belakang, dan lengan.',
   },
 ]
