@@ -22,11 +22,16 @@ class ShirtSeeder extends Seeder
             ['color_name' => 'Navy', 'color_hex' => '#1A365D'],
         ];
 
+        // Satu varian T-Shirt dipertahankan; varian Oversized lama dinonaktifkan.
+        Shirt::query()
+            ->where('name', 'Oversized T-Shirt')
+            ->update(['is_active' => false]);
+
         $products = [
             [
                 'name' => 'Basic T-Shirt',
                 'type' => 'tshirt',
-                'model_3d_path' => '/models/tshirt-regular.glb',
+                'model_3d_path' => '/models/Tshirt.glb',
                 'description' => 'Kaos regular fit berbahan cotton combed untuk kustomisasi sablon depan, belakang, dan lengan.',
                 'variants' => $defaultColors,
                 'areas' => [
@@ -57,42 +62,9 @@ class ShirtSeeder extends Seeder
                 ],
             ],
             [
-                'name' => 'Oversized T-Shirt',
-                'type' => 'tshirt',
-                'model_3d_path' => '/models/tshirt-oversized.glb',
-                'description' => 'Kaos potongan boxy drop-shoulder streetwear dengan area cetak lebih lebar.',
-                'variants' => $defaultColors,
-                'areas' => [
-                    [
-                        'view_side' => 'front',
-                        'area_name' => 'Front Print Area',
-                        'width' => 32,
-                        'height' => 40,
-                    ],
-                    [
-                        'view_side' => 'back',
-                        'area_name' => 'Back Print Area',
-                        'width' => 34,
-                        'height' => 44,
-                    ],
-                    [
-                        'view_side' => 'left_sleeve',
-                        'area_name' => 'Left Sleeve Print Area',
-                        'width' => 12,
-                        'height' => 15,
-                    ],
-                    [
-                        'view_side' => 'right_sleeve',
-                        'area_name' => 'Right Sleeve Print Area',
-                        'width' => 12,
-                        'height' => 15,
-                    ],
-                ],
-            ],
-            [
                 'name' => 'Classic Hoodie',
                 'type' => 'hoodie',
-                'model_3d_path' => '/models/hoodie-classic.glb',
+                'model_3d_path' => '/models/hoodie.glb',
                 'description' => 'Hoodie fleece lengkap dengan tudung 3D, kantong kanguru, serta area cetak dada, punggung, dan lengan.',
                 'variants' => $defaultColors,
                 'areas' => [
