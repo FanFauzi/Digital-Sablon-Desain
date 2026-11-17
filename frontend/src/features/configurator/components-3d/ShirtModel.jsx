@@ -731,6 +731,7 @@ function PrintSurfaceTexture({
 }) {
   const [textures, setTextures] = useState({
     source: null,
+    puffPrintEnabled: false,
     colorTexture: null,
     bumpTexture: null,
   })
@@ -756,6 +757,7 @@ function PrintSurfaceTexture({
       }
       setTextures({
         source: src,
+        puffPrintEnabled: Boolean(puffPrint?.enabled),
         colorTexture: createdColorTex,
         bumpTexture: createdBumpTex,
       })
@@ -775,7 +777,10 @@ function PrintSurfaceTexture({
   }, [src, puffPrint?.enabled])
 
   // Jangan render tekstur dari source sebelumnya ketika artwork sedang berganti.
-  const isCurrentTexture = Boolean(src) && textures.source === src
+  const isCurrentTexture =
+    Boolean(src) &&
+    textures.source === src &&
+    textures.puffPrintEnabled === Boolean(puffPrint?.enabled)
   const activeColorTexture = isCurrentTexture ? textures.colorTexture : null
   const activeBumpTexture = isCurrentTexture ? textures.bumpTexture : null
 
