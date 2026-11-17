@@ -177,6 +177,10 @@ php artisan test
 
 GitHub Actions menjalankan pemeriksaan frontend dan backend tersebut serta memvalidasi ukuran maksimal 1 MiB, header GLB v2, struktur JSON, dan lima mesh wajib pada seluruh model regular, oversized, dan hoodie.
 
+## Deployment
+
+Gunakan [DEPLOYMENT-CHECKLIST.md](./DEPLOYMENT-CHECKLIST.md) untuk konfigurasi production, CORS, autentikasi Bearer Token, penyimpanan privat, backup, dan pemeriksaan pascadeploy. File backend/config/cors.php membaca daftar origin dari CORS_ALLOWED_ORIGINS.
+
 ## Catatan penting untuk finalisasi
 
 Gunakan [TEST-PLAN.md](./TEST-PLAN.md) sebagai prosedur pencatatan uji manual, uji Gemini live, metrik evaluasi rekomendasi AI, dan verifikasi file produksi.
