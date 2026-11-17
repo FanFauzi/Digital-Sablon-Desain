@@ -95,11 +95,6 @@ export default function EditorPage() {
         const lowerName = String(data.name || '').toLowerCase()
         if (data.type === 'hoodie' || lowerName.includes('hoodie')) {
           setGarmentStyle('hoodie')
-        } else if (
-          data.type === 'oversized' ||
-          lowerName.includes('oversized')
-        ) {
-          setGarmentStyle('oversized')
         } else {
           setGarmentStyle('regular')
         }
