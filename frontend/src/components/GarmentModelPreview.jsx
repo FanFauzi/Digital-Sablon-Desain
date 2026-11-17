@@ -1,7 +1,43 @@
-import { Suspense, useMemo } from 'react'
+import { Component, Suspense, useEffect, useMemo, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls, useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
+
+const assetCheckCache = new Map()
+
+function isModelResponse(response) {
+  if (!response.ok) return false
+  const contentType = (response.headers.get('content-type') || '').toLowerCase()
+  return !contentType.includes('text/html') && !contentType.includes('application/json')
+}
+
+function checkModelAsset(path) {
+  if (!assetCheckCache.has(path)) {
+    assetCheckCache.set(
+      path,
+      fetch(path, { method: 'HEAD', cache: 'force-cache' })
+        .then(isModelResponse)
+        .catch(() => false)
+    )
+  }
+  return assetCheckCache.get(path)
+}
+
+class PreviewErrorBoundary extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { hasError: false }
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+
+  render() {
+    if (this.state.hasError) return this.props.fallback
+    return this.props.children
+  }
+}
 
 function GarmentModel({ modelPath }) {
   const { scene } = useGLTF(modelPath)
@@ -46,7 +82,67 @@ function LoadingGarment() {
   )
 }
 
-export default function GarmentModelPreview({ modelPath }) {
+function ModelMessage({ children }) {
+  return (
+    <div
+      role="status"
+      style={{
+        position: 'absolute',
+        inset: 0,
+        display: 'grid',
+        placeItems: 'center',
+        padding: 18,
+        color: '#66675f',
+        background: '#e9e9e5',
+        fontSize: 12,
+        textAlign: 'center',
+      }}
+    >
+      {children}
+    </div>
+  )
+}
+
+export default function GarmentModelPreview({ modelPath, fallbackPath }) {
+  const [resolvedPath, setResolvedPath] = useState('')
+  const [checked, setChecked] = useState(false)
+
+  useEffect(() => {
+    let isMounted = true
+
+    const resolveAsset = async () => {
+      const candidates = [...new Set([modelPath, fallbackPath].filter(Boolean))]
+      for (const candidate of candidates) {
+        if (await checkModelAsset(candidate)) {
+          if (isMounted) {
+            setResolvedPath(candidate)
+            setChecked(true)
+          }
+          return
+        }
+      }
+
+      if (isMounted) {
+        setResolvedPath('')
+        setChecked(true)
+      }
+    }
+
+    setResolvedPath('')
+    setChecked(false)
+    resolveAsset()
+
+    return () => {
+      isMounted = false
+    }
+  }, [modelPath, fallbackPath])
+
+  const unavailable = (
+    <ModelMessage>
+      Model 3D belum tersedia. Pastikan file GLB berada di frontend/public/models.
+    </ModelMessage>
+  )
+
   return (
     <div
       className="garment-model-preview"
@@ -57,27 +153,37 @@ export default function GarmentModelPreview({ modelPath }) {
         background: '#e9e9e5',
       }}
     >
-      <Canvas
-        dpr={[1, 1.5]}
-        camera={{ position: [0, 0.08, 2.65], fov: 36 }}
-        gl={{ alpha: true, antialias: true }}
-      >
-        <ambientLight intensity={1.35} />
-        <directionalLight position={[3, 4, 5]} intensity={2.1} />
-        <directionalLight position={[-3, 1, -4]} intensity={0.7} />
-        <Suspense fallback={<LoadingGarment />}>
-          <GarmentModel modelPath={modelPath} />
-        </Suspense>
-        <OrbitControls
-          enablePan={false}
-          enableZoom={false}
-          enableRotate
-          autoRotate
-          autoRotateSpeed={1.2}
-          minPolarAngle={Math.PI / 3}
-          maxPolarAngle={(Math.PI * 2) / 3}
-        />
-      </Canvas>
+      {!resolvedPath ? (
+        checked ? (
+          unavailable
+        ) : (
+          <ModelMessage>Memuat model 3D...</ModelMessage>
+        )
+      ) : (
+        <PreviewErrorBoundary key={resolvedPath} fallback={unavailable}>
+          <Canvas
+            dpr={[1, 1.5]}
+            camera={{ position: [0, 0.08, 2.65], fov: 36 }}
+            gl={{ alpha: true, antialias: true }}
+          >
+            <ambientLight intensity={1.35} />
+            <directionalLight position={[3, 4, 5]} intensity={2.1} />
+            <directionalLight position={[-3, 1, -4]} intensity={0.7} />
+            <Suspense fallback={<LoadingGarment />}>
+              <GarmentModel modelPath={resolvedPath} />
+            </Suspense>
+            <OrbitControls
+              enablePan={false}
+              enableZoom={false}
+              enableRotate
+              autoRotate
+              autoRotateSpeed={1.2}
+              minPolarAngle={Math.PI / 3}
+              maxPolarAngle={(Math.PI * 2) / 3}
+            />
+          </Canvas>
+        </PreviewErrorBoundary>
+      )}
     </div>
   )
 }
