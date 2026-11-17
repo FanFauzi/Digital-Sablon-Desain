@@ -53,14 +53,20 @@ export default function ShirtScene({
     }
   }
 
-  const handleViewClick = (viewId) => {
-    setCameraView(viewId)
-    if (
-      typeof onSelectSide === 'function' &&
-      ['front', 'back', 'left_sleeve', 'right_sleeve'].includes(viewId)
-    ) {
-      onSelectSide(viewId)
+  const handleViewClick = async (viewId) => {
+    const isPrintSide = ['front', 'back', 'left_sleeve', 'right_sleeve'].includes(viewId)
+
+    if (isPrintSide && typeof onSelectSide === 'function') {
+      try {
+        const switched = await onSelectSide(viewId)
+        if (switched) setCameraView(viewId)
+      } catch (error) {
+        console.error('Gagal menyinkronkan kamera dan sisi desain:', error)
+      }
+      return
     }
+
+    setCameraView(viewId)
   }
 
   const containerStyle = background.transparent
