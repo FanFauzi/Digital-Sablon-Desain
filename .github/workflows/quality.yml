@@ -46,18 +46,49 @@ jobs:
 
       - name: Verify optimized oversized 3D model
         run: |
-          model="public/models/tshirt-oversized.glb"
-          test -s "$model"
-          size=$(wc -c < "$model")
-          if [ "$size" -gt 1048576 ]; then
-            echo "Oversized model exceeds the 1 MiB asset budget: ${size} bytes"
-            exit 1
-          fi
-          if [ -e "public/models/oversized_t-shirt.glb" ]; then
-            echo "Deprecated 37 MB oversized model must not be reintroduced."
-            exit 1
-          fi
-          echo "Oversized GLB size: ${size} bytes (budget: 1048576 bytes)"
+          node --input-type=module <<'NODE'
+          import { readFileSync, existsSync } from 'node:fs'
+
+          const modelPath = 'public/models/tshirt-oversized.glb'
+          const deprecatedPath = 'public/models/oversized_t-shirt.glb'
+          const model = readFileSync(modelPath)
+
+          if (model.length > 1024 * 1024) {
+            throw new Error(`Oversized GLB exceeds 1 MiB budget: ${model.length} bytes`)
+          }
+          if (existsSync(deprecatedPath)) {
+            throw new Error('Deprecated 37 MB oversized model must not be reintroduced.')
+          }
+          if (model.toString('ascii', 0, 4) !== 'glTF') {
+            throw new Error('Oversized garment asset is not a valid GLB file.')
+          }
+
+          const version = model.readUInt32LE(4)
+          const declaredLength = model.readUInt32LE(8)
+          const jsonLength = model.readUInt32LE(12)
+          const jsonType = model.readUInt32LE(16)
+
+          if (version !== 2 || declaredLength !== model.length || jsonType !== 0x4e4f534a) {
+            throw new Error('Oversized GLB header or JSON chunk is invalid.')
+          }
+
+          const gltf = JSON.parse(model.toString('utf8', 20, 20 + jsonLength).replace(/\\0+$/, '').trim())
+          const meshNames = new Set((gltf.meshes || []).map((mesh) => mesh.name))
+          const requiredMeshes = [
+            'Garment_Body',
+            'Print_Front',
+            'Print_Back',
+            'Print_LeftSleeve',
+            'Print_RightSleeve',
+          ]
+          const missingMeshes = requiredMeshes.filter((name) => !meshNames.has(name))
+
+          if (missingMeshes.length > 0) {
+            throw new Error(`Oversized GLB is missing print surfaces: ${missingMeshes.join(', ')}`)
+          }
+
+          console.log(`Validated GLB v${version}: ${model.length} bytes; all 5 garment/print meshes present.`)
+          NODE
 
   backend:
     name: Backend PHPUnit tests
