@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\Api\V1\UploadedAssetController;
 use App\Models\UploadedAsset;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -88,6 +89,77 @@ class AuthAndProjectTest extends TestCase
         $this->actingAs($otherUser, 'sanctum')
             ->get("/api/v1/assets/{$assetId}/content")
             ->assertNotFound();
+    }
+
+    public function test_authenticated_user_can_upload_and_retrieve_webp_design_asset(): void
+    {
+        Storage::fake('local');
+
+        $user = User::factory()->create();
+        $webpBytes = base64_decode(
+            'UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEAAUAmJaQAA3AA/v89WAAAAA==',
+            true
+        );
+        $this->assertNotFalse($webpBytes);
+
+        $temporaryPath = tempnam(sys_get_temp_dir(), 'dss-webp-');
+        file_put_contents($temporaryPath, $webpBytes);
+
+        try {
+            $file = new UploadedFile(
+                $temporaryPath,
+                'illustration.webp',
+                'image/webp',
+                null,
+                true
+            );
+
+            $uploadResponse = $this->actingAs($user, 'sanctum')
+                ->post('/api/v1/assets', [
+                    'image' => $file,
+                ], [
+                    'Accept' => 'application/json',
+                ])
+                ->assertCreated()
+                ->assertJsonPath('data.original_name', 'illustration.webp')
+                ->assertJsonPath('data.mime_type', 'image/webp')
+                ->assertJsonPath('data.image_width', 1)
+                ->assertJsonPath('data.image_height', 1);
+
+            $asset = UploadedAsset::findOrFail($uploadResponse->json('data.id'));
+            $this->assertStringEndsWith('.webp', $asset->file_path);
+            Storage::disk('local')->assertExists($asset->file_path);
+
+            $this->actingAs($user, 'sanctum')
+                ->get("/api/v1/assets/{$asset->id}/content")
+                ->assertOk()
+                ->assertHeader('Content-Type', 'image/webp');
+        } finally {
+            @unlink($temporaryPath);
+        }
+    }
+
+    public function test_legacy_webp_data_url_can_be_migrated_to_file_storage(): void
+    {
+        Storage::fake('local');
+
+        $user = User::factory()->create();
+        $dataUrl = 'data:image/webp;base64,UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEAAUAmJaQAA3AA/v89WAAAAA==';
+
+        $asset = UploadedAssetController::storeFromDataUrl(
+            $user,
+            $dataUrl,
+            'legacy-artwork.webp'
+        );
+
+        $this->assertSame('image/webp', $asset->mime_type);
+        $this->assertStringEndsWith('.webp', $asset->file_path);
+        Storage::disk('local')->assertExists($asset->file_path);
+        $this->assertDatabaseHas('uploaded_assets', [
+            'id' => $asset->id,
+            'mime_type' => 'image/webp',
+            'original_name' => 'legacy-artwork.webp',
+        ]);
     }
 
     public function test_authenticated_user_can_save_update_and_delete_project_with_file_asset_references(): void
