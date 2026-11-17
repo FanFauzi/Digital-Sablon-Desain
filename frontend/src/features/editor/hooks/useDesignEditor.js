@@ -9,6 +9,7 @@ import {
 
 import { EDITOR_CONFIG } from '../utils/editorConfig'
 import { getPlacementFromPreset } from '../utils/placementUtils'
+import { createAnalysisCacheKey } from '../utils/analysisCacheKey'
 import {
   PRINT_PLACEMENT_PRESETS,
   useConfiguratorStore,
@@ -1470,7 +1471,12 @@ export default function useDesignEditor(canvasElement) {
 
     const objectEditorId = targetImage.editorId || null
     lastAnalyzedObjectIdRef.current = objectEditorId
-    const cacheKey = objectEditorId ? `${objectEditorId}:${currentSide}` : null
+    const cacheKey = createAnalysisCacheKey({
+      editorId: objectEditorId,
+      currentSide,
+      shirtType,
+      currentColor,
+    })
 
     if (!forceRefresh && cacheKey && analysisCacheRef.current.has(cacheKey)) {
       const cachedResult = analysisCacheRef.current.get(cacheKey)
