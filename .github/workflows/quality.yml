@@ -72,7 +72,11 @@ jobs:
             throw new Error('Oversized GLB header or JSON chunk is invalid.')
           }
 
-          const gltf = JSON.parse(model.toString('utf8', 20, 20 + jsonLength).replace(/\\0+$/, '').trim())
+          if (20 + jsonLength > model.length) {
+            throw new Error('Oversized GLB JSON chunk is truncated.')
+          }
+
+          const gltf = JSON.parse(model.toString('utf8', 20, 20 + jsonLength).replace(/\0+$/, '').trim())
           const meshNames = new Set((gltf.meshes || []).map((mesh) => mesh.name))
           const requiredMeshes = [
             'Garment_Body',
