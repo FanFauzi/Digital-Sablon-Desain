@@ -23,7 +23,8 @@ Route::prefix('v1')->group(function () {
         });
     });
 
-    Route::post('/designs/analyze', [DesignAnalysisController::class, 'analyze']);
+    Route::post('/designs/analyze', [DesignAnalysisController::class, 'analyze'])
+        ->middleware(['auth:sanctum', 'throttle:3,1']);
     Route::get('/shirts', [ShirtController::class, 'index']);
     Route::get('/shirts/{id}', [ShirtController::class, 'show'])
         ->whereNumber('id');
