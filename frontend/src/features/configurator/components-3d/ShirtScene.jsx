@@ -5,6 +5,7 @@ import ShirtModel from './ShirtModel'
 import CameraController from './CameraController'
 import Lighting from './Lighting'
 import { useConfiguratorStore } from '../store/configuratorStore'
+import { syncCameraToPrintSide } from '../utils/cameraView'
 
 const CAMERA_VIEWS = [
   { id: 'front', label: 'Depan' },
@@ -54,19 +55,11 @@ export default function ShirtScene({
   }
 
   const handleViewClick = async (viewId) => {
-    const isPrintSide = ['front', 'back', 'left_sleeve', 'right_sleeve'].includes(viewId)
-
-    if (isPrintSide && typeof onSelectSide === 'function') {
-      try {
-        const switched = await onSelectSide(viewId)
-        if (switched) setCameraView(viewId)
-      } catch (error) {
-        console.error('Gagal menyinkronkan kamera dan sisi desain:', error)
-      }
-      return
+    try {
+      await syncCameraToPrintSide(viewId, onSelectSide, setCameraView)
+    } catch (error) {
+      console.error('Gagal menyinkronkan kamera dan sisi desain:', error)
     }
-
-    setCameraView(viewId)
   }
 
   const containerStyle = background.transparent
