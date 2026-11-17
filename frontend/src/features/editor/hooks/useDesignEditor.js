@@ -1606,7 +1606,7 @@ export default function useDesignEditor(canvasElement) {
     // Hindari alokasi canvas yang terlalu besar dan berisiko membuat tab browser kehabisan memori.
     if (pixelWidth > 10000 || pixelHeight > 10000 || totalPixels > 40000000) {
       throw new Error(
-        'Resolusi ekspor terlalu besar untuk browser ini. Gunakan DPI maksimal 300 atau kurangi ukuran cetak.'
+        'Resolusi ekspor terlalu besar untuk browser ini. Turunkan DPI atau kurangi ukuran fisik area cetak.'
       )
     }
 
