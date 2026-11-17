@@ -87,7 +87,7 @@ export default function HomePage() {
 
               <div className="hero-garment-stage">
                 <div style={{ position: 'absolute', inset: 0 }}>
-                  <GarmentModelPreview modelPath="/models/Tshirt.glb" />
+                  <GarmentModelPreview modelPath="/models/Tshirt.glb" fallbackPath="/models/tshirt-regular.glb" />
                 </div>
 
                 {/* Editorial Callout Badges */}
@@ -104,10 +104,10 @@ export default function HomePage() {
 
               <div className="hero-card-footer">
                 <div>
-                  <strong>Oversized Streetwear Tee</strong>
+                  <strong>Basic T-Shirt</strong>
                   <p>100% Combed Cotton Heavyweight · Zero Shrinkage</p>
                 </div>
-                <Link to="/editor/2" className="hero-card-btn" title="Kustomisasi Produk Ini">
+                <Link to="/editor/1" className="hero-card-btn" title="Kustomisasi Produk Ini">
                   <ArrowUpRight size={18} />
                 </Link>
               </div>
@@ -177,7 +177,7 @@ export default function HomePage() {
               <span className="garment-material-badge highlight">380 GSM FRENCH TERRY</span>
             </div>
             <div className="garment-card-visual" style={{ position: 'relative', width: '100%' }}>
-              <GarmentModelPreview modelPath="/models/hoodie.glb" />
+              <GarmentModelPreview modelPath="/models/hoodie.glb" fallbackPath="/models/hoodie-classic.glb" />
             </div>
             <div className="garment-card-body">
               <span className="garment-type-label">HEAVYWEIGHT FLEECE</span>
@@ -364,7 +364,6 @@ export default function HomePage() {
             <div className="footer-links-column">
               <span className="footer-col-title">Siluet Produk</span>
               <ul>
-                <li><Link to="/editor/2">Oversized T-Shirt (240 GSM)</Link></li>
                 <li><Link to="/editor/3">Classic Hoodie (380 GSM)</Link></li>
                 <li><Link to="/editor/1">Basic Crewneck (190 GSM)</Link></li>
               </ul>
