@@ -4,6 +4,7 @@ import { Save, FolderPlus, Download, FolderOpen, Trash2 } from 'lucide-react'
 
 import useDesignEditor from '../features/editor/hooks/useDesignEditor'
 import { EDITOR_CONFIG } from '../features/editor/utils/editorConfig'
+import { getCloudProjectId } from '../utils/projectIds'
 import { getShirtById } from '../services/shirtService'
 import {
   deleteEditorProject,
@@ -402,9 +403,7 @@ export default function EditorPage() {
     }
   }
 
-  const activeCloudProjectId = activeProjectId?.startsWith('cloud:')
-    ? activeProjectId.slice('cloud:'.length)
-    : null
+  const activeCloudProjectId = getCloudProjectId(activeProjectId)
 
   return (
     <main className="editor-page studio-3d-page">
