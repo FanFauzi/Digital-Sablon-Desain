@@ -14,7 +14,7 @@
 | Branch Pengembangan | `fix/fabric-canvas-print-area` |
 | Backend | Laravel 13 |
 | Frontend | React + Vite |
-| Database | MySQL / MariaDB |
+| Database | MySQL/MariaDB untuk deployment; SQLite didukung untuk pengembangan lokal dan CI |
 | Canvas Engine | Fabric.js 7 |
 | 3D Rendering | Three.js + React Three Fiber |
 | AI Integration | Google Gemini API (backend terintegrasi; validasi live dan kualitas rekomendasi pending) |
@@ -579,7 +579,7 @@ Integrasi tambahan:
 | 3D Framework | React Three Fiber | Integrasi Three.js dengan React |
 | Backend | Laravel 13 | Business logic dan API |
 | Authentication | Laravel Sanctum | Autentikasi API |
-| Database | MySQL/MariaDB | Penyimpanan data |
+| Database | MySQL/MariaDB (deployment) / SQLite (lokal dan CI) | Penyimpanan data |
 | AI | Gemini API | Analisis gambar yang direncanakan |
 | Local Storage | IndexedDB | Penyimpanan proyek lokal |
 
