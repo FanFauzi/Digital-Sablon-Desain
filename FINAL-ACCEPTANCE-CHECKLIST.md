@@ -51,6 +51,7 @@ Checklist ini memisahkan pemeriksaan otomatis dari uji manual yang perlu dilakuk
 - [ ] Ekspor PNG 2D menghasilkan transparansi dan crop sesuai area cetak.
 - [ ] Dimensi piksel sesuai rumus pembulatan `(cm / 2.54) × DPI`.
 - [ ] Metadata DPI/pHYs dibaca aplikasi pemeriksa gambar; jangan hanya mengandalkan nama file.
+- [ ] Rasio aspek gambar hasil ekspor tidak berubah dan sesuai ukuran fisik area cetak; cocokkan dengan rasio permukaan mesh 3D agar desain tidak tampak tertarik/melebar.
 - [ ] Objek yang melewati batas area cetak memunculkan peringatan clipping.
 - [ ] Setiap sisi menghasilkan file berbeda dengan nama sisi yang benar.
 - [ ] Ekspor mockup PNG/JPG, GLB, dan video diuji pada browser yang ditargetkan; format video dapat berbeda mengikuti dukungan codec.
