@@ -199,7 +199,15 @@ export async function export3DVideoWebM({
     })
 
     recorder.start()
-    await new Promise((resolve) => window.setTimeout(resolve, durationMs))
+    const durationTimer = new Promise((resolve) => {
+      window.setTimeout(resolve, durationMs)
+    })
+
+    await Promise.race([
+      durationTimer,
+      recordingPromise.then(() => undefined),
+    ])
+
     if (recorder.state !== 'inactive') {
       recorder.stop()
     }
