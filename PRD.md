@@ -81,7 +81,7 @@ Digital Sablon Studio mencakup fitur-fitur berikut:
 | MOD-10 | Design Export | Ekspor desain PNG dengan metadata DPI |
 | MOD-11 | Project Management | Penyimpanan, pembukaan, dan penghapusan proyek |
 | MOD-12 | Cloud Storage | Penyimpanan proyek pada server berdasarkan akun |
-| MOD-13 | AI Multimodal | Analisis gambar dan rekomendasi penempatan desain |
+| MOD-13 | AI Multimodal | Analisis gambar dan rekomendasi penempatan pada sisi aktif |
 
 ## 2.2 Di Luar Ruang Lingkup Versi Saat Ini
 
@@ -335,7 +335,7 @@ Kriteria penerimaan:
 - Posisi dan dimensi batas cetak mengikuti konfigurasi produk.
 - Objek desain dapat diperiksa terhadap area cetak.
 
-## 5.6 Front and Back Design
+## 5.6 Multi-Side Design
 
 **FR-015 – Pemisahan Canvas Depan dan Belakang**
 
@@ -580,7 +580,7 @@ Integrasi tambahan:
 | Backend | Laravel 13 | Business logic dan API |
 | Authentication | Laravel Sanctum | Autentikasi API |
 | Database | MySQL/MariaDB (deployment) / SQLite (lokal dan CI) | Penyimpanan data |
-| AI | Gemini API | Analisis gambar yang direncanakan |
+| AI | Google Gemini API | Analisis multimodal dan rekomendasi penempatan; validasi live pending |
 | Local Storage | IndexedDB | Penyimpanan proyek lokal |
 
 ## 7.3 API Utama
