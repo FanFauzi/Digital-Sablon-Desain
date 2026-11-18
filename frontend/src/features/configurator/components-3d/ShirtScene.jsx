@@ -30,14 +30,10 @@ export default function ShirtScene({
     cameraView,
     cameraZoom,
     cameraResetTrigger,
-    autoRotate,
-    background,
     materialEffects,
-    motion,
     setCameraView,
     setCameraZoom,
     triggerCameraReset,
-    toggleAutoRotate,
   } = useConfiguratorStore()
 
   const r3fContextRef = useRef({
@@ -62,21 +58,11 @@ export default function ShirtScene({
     }
   }
 
-  const containerStyle = background.transparent
-    ? undefined
-    : background.customImageUrl
-      ? {
-          backgroundImage: `url(${background.customImageUrl})`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-        }
-      : {
-          backgroundColor: background.color || '#E9E9E5',
-        }
+  const containerStyle = { backgroundColor: '#E9E9E5' }
 
   return (
     <div
-      className={`shirt-3d-stage ${background.transparent ? 'checkerboard-bg' : ''}`}
+      className="shirt-3d-stage"
       style={containerStyle}
     >
       {/* Top HUD Badges */}
@@ -92,11 +78,6 @@ export default function ShirtScene({
         )}
         {materialEffects?.puffPrint?.enabled && (
           <span className="shirt-3d-badge accent">PUFF PRINT 3D</span>
-        )}
-        {motion?.mode && motion.mode !== 'static' && (
-          <span className="shirt-3d-badge accent">
-            MOTION: {motion.mode.toUpperCase()} ({motion.speed}x)
-          </span>
         )}
       </div>
 
@@ -124,7 +105,6 @@ export default function ShirtScene({
             designPreviewVersion={designPreviewVersion}
             sidePreviews={sidePreviews}
             materialEffects={materialEffects}
-            motion={motion}
             onSceneReady={(garmentGroup) => notifySceneReady({ garmentGroup })}
           />
           {materialEffects?.lighting?.shadows !== false && (
@@ -142,7 +122,6 @@ export default function ShirtScene({
           cameraView={cameraView}
           cameraZoom={cameraZoom}
           cameraResetTrigger={cameraResetTrigger}
-          autoRotate={Boolean(autoRotate || motion?.cameraAutoRotate)}
         />
       </Canvas>
 
@@ -182,14 +161,6 @@ export default function ShirtScene({
             title="Zoom In"
           >
             +
-          </button>
-          <button
-            type="button"
-            className={autoRotate ? 'active' : ''}
-            onClick={toggleAutoRotate}
-            title="Putar Otomatis 360°"
-          >
-            ↻ 360°
           </button>
         </div>
       </div>
