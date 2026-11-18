@@ -87,7 +87,7 @@ export default function HomePage() {
 
               <div className="hero-garment-stage">
                 <div style={{ position: 'absolute', inset: 0 }}>
-                  <GarmentModelPreview modelPath="/models/Tshirt.glb" fallbackPath="/models/tshirt-regular.glb" />
+                  <GarmentModelPreview modelPath="/models/Tshirt.glb" />
                 </div>
 
                 {/* Editorial Callout Badges */}
@@ -177,7 +177,7 @@ export default function HomePage() {
               <span className="garment-material-badge highlight">380 GSM FRENCH TERRY</span>
             </div>
             <div className="garment-card-visual" style={{ position: 'relative', width: '100%' }}>
-              <GarmentModelPreview modelPath="/models/hoodie.glb" fallbackPath="/models/hoodie-classic.glb" />
+              <GarmentModelPreview modelPath="/models/hoodie.glb" />
             </div>
             <div className="garment-card-body">
               <span className="garment-type-label">HEAVYWEIGHT FLEECE</span>
