@@ -1017,7 +1017,6 @@ export default function ShirtModel({
               emissive="#000000"
               emissiveIntensity={0}
               metalness={0.02}
-              wireframe={motion?.mode === 'knit'}
               side={THREE.DoubleSide}
             />
           )}
