@@ -22,11 +22,11 @@ export default function Lighting({ lighting = {}, garmentColor = '#ffffff' }) {
   return (
     <>
       <ambientLight
-        intensity={isDarkGarment ? Math.max(baseAmbient, 1.5) : baseAmbient}
+        intensity={isDarkGarment ? Math.max(baseAmbient, 2.0) : baseAmbient}
       />
       <directionalLight
         position={[lightX, 4.2, lightZ]}
-        intensity={isDarkGarment ? Math.max(baseDirectional, 2.35) : baseDirectional}
+        intensity={isDarkGarment ? Math.max(baseDirectional, 3.0) : baseDirectional}
         castShadow={Boolean(shadows)}
         shadow-mapSize-width={1024}
         shadow-mapSize-height={1024}
@@ -37,12 +37,12 @@ export default function Lighting({ lighting = {}, garmentColor = '#ffffff' }) {
       />
       {isDarkGarment && (
         <>
-          <directionalLight position={[0.5, 2.6, 4.5]} intensity={0.85} />
-          <directionalLight position={[-3.5, 2.2, -3.5]} intensity={0.75} />
+          <directionalLight position={[0.4, 3.0, 5.0]} intensity={1.25} />
+          <directionalLight position={[-3.5, 2.4, -3.5]} intensity={1.0} />
         </>
       )}
       <hemisphereLight
-        args={['#ffffff', '#b8b8b0', isDarkGarment ? 0.72 : 0.45]}
+        args={['#ffffff', '#b8b8b0', isDarkGarment ? 0.95 : 0.45]}
       />
     </>
   )
