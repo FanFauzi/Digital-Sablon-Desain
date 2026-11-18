@@ -19,11 +19,6 @@ export const GARMENT_MODELS = [
     type: 'hoodie',
     modelPath: '/models/hoodie.glb',
     candidatePaths: ['/models/hoodie.glb'],
-    // Model hoodie terbaru memakai Z untuk lebar dan X untuk kedalaman.
-    // ShirtModel mengonversinya ke sumbu standar sebelum membuat permukaan cetak.
-    pathOrientations: {
-      '/models/hoodie.glb': 'hoodie-sketchfab',
-    },
     fallbackPath: '/models/hoodie-classic.glb',
     description: 'Model hoodie GLB untuk kustomisasi desain pada bagian depan, belakang, dan lengan.',
   },
