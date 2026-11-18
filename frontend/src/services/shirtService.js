@@ -7,3 +7,8 @@ export const getShirts = async () => {
   const result = response.data
   return Array.isArray(result) ? result : result.data ?? []
 }
+
+export const getShirtById = async (shirtId) => {
+  const response = await api.get(`/shirts/${shirtId}`)
+  return response.data?.data ?? response.data
+}
