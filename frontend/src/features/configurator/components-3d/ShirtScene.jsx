@@ -112,7 +112,7 @@ export default function ShirtScene({
           notifySceneReady({ gl, scene, camera })
         }}
       >
-        <Lighting lighting={materialEffects?.lighting} />
+        <Lighting lighting={materialEffects?.lighting} garmentColor={color} />
 
         <Suspense fallback={null}>
           <ShirtModel
