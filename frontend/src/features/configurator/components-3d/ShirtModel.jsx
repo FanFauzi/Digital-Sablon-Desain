@@ -836,7 +836,6 @@ export default function ShirtModel({
   onSceneReady,
 }) {
   const groupRef = useRef(null)
-  const wasDeformedRef = useRef(false)
   const customModels = useConfiguratorStore((s) => s.customModels)
   const setActiveModelLabel = useConfiguratorStore((s) => s.setActiveModelLabel)
   const setSurfaceMapping = useConfiguratorStore((s) => s.setSurfaceMapping)
