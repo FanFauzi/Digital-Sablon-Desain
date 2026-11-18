@@ -1,25 +1,20 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
-  BACKGROUND_PRESETS,
   FABRIC_TEXTURES,
   GARMENT_COLOR_PRESETS,
   GARMENT_MODELS,
-  MOTION_MODES,
   PRINT_PLACEMENT_PRESETS,
   useConfiguratorStore,
 } from '../store/configuratorStore'
 import {
   export3DMockupImage,
   export3DModelGLB,
-  export3DVideoWebM,
 } from '../services/exportService'
 
 const SIDEBAR_TABS = [
   { id: 'upload', icon: '⬆', label: 'Upload' },
   { id: 'artwork', icon: '❖', label: 'Artwork' },
   { id: 'color', icon: '◉', label: 'Color' },
-  { id: 'background', icon: '▣', label: 'Bg' },
-  { id: 'motion', icon: '↝', label: 'Motion' },
   { id: 'effects', icon: '✦', label: 'Effects' },
   { id: 'export', icon: '⬇', label: 'Export' },
 ]
@@ -50,6 +45,12 @@ export default function Sidebar({
   const activeTab = useConfiguratorStore((s) => s.activeTab)
   const setActiveTab = useConfiguratorStore((s) => s.setActiveTab)
   const workspaceMode = useConfiguratorStore((s) => s.workspaceMode)
+
+  useEffect(() => {
+    if (activeTab === 'background' || activeTab === 'motion') {
+      setActiveTab('upload')
+    }
+  }, [activeTab, setActiveTab])
 
   const garmentStyle = useConfiguratorStore((s) => s.garmentStyle)
   const setGarmentStyle = useConfiguratorStore((s) => s.setGarmentStyle)
@@ -90,12 +91,6 @@ export default function Sidebar({
     event.target.value = ''
   }
 
-  const background = useConfiguratorStore((s) => s.background)
-  const setBackgroundPreset = useConfiguratorStore((s) => s.setBackgroundPreset)
-  const setCustomBackgroundColor = useConfiguratorStore((s) => s.setCustomBackgroundColor)
-  const setCustomBackgroundImage = useConfiguratorStore((s) => s.setCustomBackgroundImage)
-  const resetBackground = useConfiguratorStore((s) => s.resetBackground)
-
   const materialEffects = useConfiguratorStore((s) => s.materialEffects)
   const setFabricType = useConfiguratorStore((s) => s.setFabricType)
   const updateAcidWash = useConfiguratorStore((s) => s.updateAcidWash)
@@ -103,14 +98,6 @@ export default function Sidebar({
   const updateLighting = useConfiguratorStore((s) => s.updateLighting)
   const resetMaterialEffects = useConfiguratorStore((s) => s.resetMaterialEffects)
 
-  const motion = useConfiguratorStore((s) => s.motion)
-  const setMotionMode = useConfiguratorStore((s) => s.setMotionMode)
-  const setMotionSpeed = useConfiguratorStore((s) => s.setMotionSpeed)
-  const toggleMotionPlaying = useConfiguratorStore((s) => s.toggleMotionPlaying)
-  const resetMotion = useConfiguratorStore((s) => s.resetMotion)
-
-  const autoRotate = useConfiguratorStore((s) => s.autoRotate)
-  const toggleAutoRotate = useConfiguratorStore((s) => s.toggleAutoRotate)
   const setCameraView = useConfiguratorStore((s) => s.setCameraView)
 
   const exportConfig = useConfiguratorStore((s) => s.exportConfig)
@@ -164,38 +151,6 @@ export default function Sidebar({
     })
   }
 
-  const releaseCustomBackgroundImage = () => {
-    const currentUrl = useConfiguratorStore.getState().background?.customImageUrl
-    if (currentUrl?.startsWith('blob:')) {
-      URL.revokeObjectURL(currentUrl)
-    }
-  }
-
-  const handleBackgroundPreset = (presetId) => {
-    releaseCustomBackgroundImage()
-    setBackgroundPreset(presetId)
-  }
-
-  const handleBackgroundColorChange = (color) => {
-    releaseCustomBackgroundImage()
-    setCustomBackgroundColor(color)
-  }
-
-  const handleBackgroundReset = () => {
-    releaseCustomBackgroundImage()
-    resetBackground()
-  }
-
-  const handleBgImageUpload = (event) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-
-    releaseCustomBackgroundImage()
-    const url = URL.createObjectURL(file)
-    setCustomBackgroundImage(url)
-    event.target.value = ''
-  }
-
   const handleExport3D = async (formatOverride) => {
     const format = formatOverride || exportConfig.format
     if (exportConfig.isExporting) return
@@ -224,7 +179,7 @@ export default function Sidebar({
           format,
           resolution: exportConfig.resolution,
           transparentBg: exportConfig.transparentBg,
-          backgroundColor: background.color,
+          backgroundColor: '#E9E9E5',
           fileNamePrefix: baseName,
         })
         setExportStatus(`Berhasil mengunduh ${res.fileName} (${res.width}×${res.height}px)`)
@@ -237,18 +192,6 @@ export default function Sidebar({
           fileNamePrefix: baseName,
         })
         setExportStatus(`Berhasil mengunduh model 3D ${res.fileName}`)
-      } else if (format === 'video') {
-        if (!ctx?.gl) {
-          throw new Error('3D Viewer belum siap untuk merekam video.')
-        }
-        setExportStatus('Merekam animasi 3D selama 4 detik...')
-        const res = await export3DVideoWebM({
-          gl: ctx.gl,
-          durationMs: 4000,
-          fps: 30,
-          fileNamePrefix: baseName,
-        })
-        setExportStatus(`Berhasil mengunduh video ${res.fileName}`)
       }
     } catch (error) {
       setExportStatus('')
@@ -552,149 +495,11 @@ export default function Sidebar({
           </div>
         )}
 
-        {/* 4. BACKGROUND */}
-        {activeTab === 'background' && (
-          <div className="sidebar-section">
-            <div className="sidebar-section-header">
-              <span className="eyebrow">STEP 4 · STUDIO ENVIRONMENT</span>
-              <h3>Background Mockup</h3>
-            </div>
-
-            <div className="sidebar-block">
-              <label className="sidebar-label">Preset Background Studio</label>
-              <div className="bg-preset-grid">
-                {BACKGROUND_PRESETS.map((preset) => (
-                  <button
-                    key={preset.id}
-                    type="button"
-                    className={`bg-preset-btn ${
-                      background.presetId === preset.id ? 'active' : ''
-                    }`}
-                    onClick={() => handleBackgroundPreset(preset.id)}
-                  >
-                    <span
-                      className={`bg-preset-swatch ${preset.transparent ? 'checkerboard' : ''}`}
-                      style={
-                        preset.transparent
-                          ? undefined
-                          : { backgroundColor: preset.color }
-                      }
-                    />
-                    <span>{preset.name}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="sidebar-block">
-              <label className="sidebar-label">Warna Latar Kustom</label>
-              <div className="custom-color-inline">
-                <input
-                  type="color"
-                  value={background.color || '#f1f5f9'}
-                  onChange={(e) => handleBackgroundColorChange(e.target.value)}
-                />
-                <span>{background.color || 'Transparan'}</span>
-              </div>
-            </div>
-
-            <div className="sidebar-block">
-              <label className="sidebar-label">Unggah Gambar Background</label>
-              <label className="upload-browse-btn full-width">
-                Pilih Gambar Latar
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  hidden
-                  onChange={handleBgImageUpload}
-                />
-              </label>
-            </div>
-
-            <button
-              type="button"
-              className="sidebar-reset-btn"
-              onClick={handleBackgroundReset}
-            >
-              ↺ Reset Background Default
-            </button>
-          </div>
-        )}
-
-        {/* 5. MOTION & ANIMATION */}
-        {activeTab === 'motion' && (
-          <div className="sidebar-section">
-            <div className="sidebar-section-header">
-              <span className="eyebrow">STEP 5 · MOTION STUDIO</span>
-              <h3>Simulasi Gerakan 3D</h3>
-            </div>
-
-            <div className="sidebar-block">
-              <label className="sidebar-label">Pilih Mode Animasi</label>
-              <div className="motion-mode-grid">
-                {MOTION_MODES.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={`motion-mode-card ${
-                      motion.mode === item.id ? 'active' : ''
-                    }`}
-                    onClick={() => setMotionMode(item.id)}
-                  >
-                    <strong>{item.name}</strong>
-                    <span>{item.description}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="sidebar-block">
-              <label className="sidebar-label">
-                Kecepatan Animasi ({motion.speed.toFixed(2)}x)
-              </label>
-              <input
-                type="range"
-                min="0.25"
-                max="2"
-                step="0.05"
-                value={motion.speed}
-                onChange={(e) => setMotionSpeed(e.target.value)}
-              />
-            </div>
-
-            <div className="sidebar-block sidebar-button-row">
-              <button
-                type="button"
-                className="sidebar-action-btn"
-                onClick={toggleMotionPlaying}
-                disabled={motion.mode === 'static'}
-              >
-                {motion.isPlaying ? '⏸ Jeda Animasi' : '▶ Putar Animasi'}
-              </button>
-              <button
-                type="button"
-                className={`sidebar-action-btn ${autoRotate ? 'active' : ''}`}
-                onClick={toggleAutoRotate}
-              >
-                ↻ Turntable 360°: {autoRotate ? 'ON' : 'OFF'}
-              </button>
-            </div>
-
-            <button
-              type="button"
-              className="sidebar-reset-btn"
-              onClick={resetMotion}
-            >
-              ↺ Reset ke Posisi Statis
-            </button>
-          </div>
-        )}
-
-        {/* 6. MATERIAL EFFECTS */}
+        {/* 4. MATERIAL EFFECTS */}
         {activeTab === 'effects' && (
           <div className="sidebar-section">
             <div className="sidebar-section-header">
-              <span className="eyebrow">STEP 6 · MATERIAL & SHADER</span>
+              <span className="eyebrow">STEP 4 · MATERIAL & SHADER</span>
               <h3>Efek Kain & Sablon</h3>
             </div>
 
@@ -879,11 +684,11 @@ export default function Sidebar({
           </div>
         )}
 
-        {/* 7. EXPORT & DOWNLOAD */}
+        {/* 5. EXPORT & DOWNLOAD */}
         {activeTab === 'export' && (
           <div className="sidebar-section">
             <div className="sidebar-section-header">
-              <span className="eyebrow">STEP 7 · EXPORT & PRODUCTION</span>
+              <span className="eyebrow">STEP 5 · EXPORT & PRODUCTION</span>
               <h3>Unduh Mockup & File Cetak</h3>
             </div>
 
@@ -933,14 +738,6 @@ export default function Sidebar({
                   onClick={() => handleExport3D('jpg')}
                 >
                   ⬇ Export 3D Mockup JPG ({exportConfig.resolution})
-                </button>
-                <button
-                  type="button"
-                  className="sidebar-action-btn full-width"
-                  disabled={exportConfig.isExporting || workspaceMode === '2d'}
-                  onClick={() => handleExport3D('video')}
-                >
-                  🎬 Export Video Animasi 3D (WebM/MP4 · 4 dtk)
                 </button>
                 <button
                   type="button"
