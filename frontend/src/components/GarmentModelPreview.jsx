@@ -53,21 +53,13 @@ function GarmentModel({ modelPath }) {
     const initialBounds = new THREE.Box3().setFromObject(object)
     const initialSize = initialBounds.getSize(new THREE.Vector3())
 
-    if (initialSize.z > initialSize.y * 1.35) {
-      if (initialSize.x < initialSize.y * 0.7) {
-        // Model hoodie sumber memakai sumbu X untuk kedalaman, Y untuk lebar,
-        // dan Z untuk tinggi. Putar ketiga sumbu agar lebar kembali menghadap kamera.
-        const axisCorrection = new THREE.Matrix4().set(
-          0, 1, 0, 0,
-          0, 0, 1, 0,
-          1, 0, 0, 0,
-          0, 0, 0, 1
-        )
-        object.quaternion.setFromRotationMatrix(axisCorrection)
-      } else {
-        // Model Z-up standar: ubah sumbu Z menjadi sumbu tinggi Y.
-        object.rotation.x = -Math.PI / 2
-      }
+    if (modelPath.endsWith('/hoodie.glb')) {
+      // Match the axis normalization used by the real-time configurator.
+      // The new Hoodie GLB has width on Z and depth on X.
+      object.rotation.y = Math.PI / 2
+    } else if (initialSize.z > initialSize.y * 1.35) {
+      // Model Z-up standar: ubah sumbu Z menjadi sumbu tinggi Y.
+      object.rotation.x = -Math.PI / 2
     }
 
     object.updateMatrixWorld(true)
