@@ -3,6 +3,25 @@ import { getShirts } from '../services/shirtService'
 import ProductCard from '../components/ProductCard'
 import { Search, RefreshCw, AlertCircle } from 'lucide-react'
 
+// Hide the legacy oversized T-Shirt even if an older database record is still active.
+const isOversizedTShirt = (product) => {
+  const identity = [product?.name, product?.type]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+
+  return (
+    identity.includes('oversize') &&
+    (identity.includes('tshirt') || identity.includes('shirt'))
+  )
+}
+
+const filterCatalogProducts = (items) =>
+  (Array.isArray(items) ? items : []).filter(
+    (product) => !isOversizedTShirt(product)
+  )
+
 // Fallback catalog aligned with database seeders so preview works even if API is starting
 const FALLBACK_PRODUCTS = [
   {
@@ -44,7 +63,7 @@ export default function CatalogPage() {
       .then((data) => {
         if (!isMounted) return
         if (Array.isArray(data) && data.length > 0) {
-          setProducts(data)
+          setProducts(filterCatalogProducts(data))
         } else {
           setProducts(FALLBACK_PRODUCTS)
         }
@@ -69,7 +88,7 @@ export default function CatalogPage() {
     getShirts()
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) {
-          setProducts(data)
+          setProducts(filterCatalogProducts(data))
         } else {
           setProducts(FALLBACK_PRODUCTS)
         }
