@@ -19,6 +19,11 @@ export const GARMENT_MODELS = [
     type: 'hoodie',
     modelPath: '/models/hoodie.glb',
     candidatePaths: ['/models/hoodie.glb'],
+    // GLB sumber menyimpan lebar pada Z dan kedalaman pada X.
+    // Rotasi +90° di ShirtModel memetakan sumbu lebar ke X dan depan/belakang ke Z.
+    pathOrientations: {
+      '/models/hoodie.glb': 'hoodie-source-axes-positive-y',
+    },
     fallbackPath: '/models/hoodie-classic.glb',
     description: 'Model hoodie GLB untuk kustomisasi desain pada bagian depan, belakang, dan lengan.',
   },
