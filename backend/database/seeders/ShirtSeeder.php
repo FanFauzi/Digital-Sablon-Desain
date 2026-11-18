@@ -11,35 +11,23 @@ class ShirtSeeder extends Seeder
 {
     public function run(): void
     {
-        $defaultColors = [
-            ['color_name' => 'White', 'color_hex' => '#FFFFFF'],
-            ['color_name' => 'Black', 'color_hex' => '#000000'],
-            ['color_name' => 'Red', 'color_hex' => '#E53E3E'],
-            ['color_name' => 'Blue', 'color_hex' => '#3182CE'],
-            ['color_name' => 'Green', 'color_hex' => '#38A169'],
-            ['color_name' => 'Yellow', 'color_hex' => '#D69E2E'],
-            ['color_name' => 'Grey', 'color_hex' => '#808080'],
-            ['color_name' => 'Navy', 'color_hex' => '#1A365D'],
-        ];
-
-        // Satu varian T-Shirt dipertahankan; varian Oversized lama dinonaktifkan.
-        Shirt::query()
-            ->where('name', 'Oversized T-Shirt')
-            ->update(['is_active' => false]);
-
         $products = [
             [
                 'name' => 'Basic T-Shirt',
                 'type' => 'tshirt',
-                'model_3d_path' => '/models/Tshirt.glb',
-                'description' => 'Kaos regular fit berbahan cotton combed untuk kustomisasi sablon depan, belakang, dan lengan.',
-                'variants' => $defaultColors,
+                'description' => 'Kaos basic untuk kebutuhan desain sablon custom.',
+                'variants' => [
+                    ['color_name' => 'Black', 'color_hex' => '#000000'],
+                    ['color_name' => 'White', 'color_hex' => '#FFFFFF'],
+                    ['color_name' => 'Red', 'color_hex' => '#E53E3E'],
+                    ['color_name' => 'Navy', 'color_hex' => '#1A365D'],
+                ],
                 'areas' => [
                     [
                         'view_side' => 'front',
                         'area_name' => 'Front Print Area',
-                        'width' => 28,
-                        'height' => 36,
+                        'width' => 25,
+                        'height' => 30,
                     ],
                     [
                         'view_side' => 'back',
@@ -47,50 +35,30 @@ class ShirtSeeder extends Seeder
                         'width' => 30,
                         'height' => 40,
                     ],
-                    [
-                        'view_side' => 'left_sleeve',
-                        'area_name' => 'Left Sleeve Print Area',
-                        'width' => 10,
-                        'height' => 12,
-                    ],
-                    [
-                        'view_side' => 'right_sleeve',
-                        'area_name' => 'Right Sleeve Print Area',
-                        'width' => 10,
-                        'height' => 12,
-                    ],
                 ],
             ],
             [
                 'name' => 'Classic Hoodie',
                 'type' => 'hoodie',
-                'model_3d_path' => '/models/hoodie.glb',
-                'description' => 'Hoodie fleece lengkap dengan tudung 3D, kantong kanguru, serta area cetak dada, punggung, dan lengan.',
-                'variants' => $defaultColors,
+                'description' => 'Hoodie custom untuk desain sablon bagian depan dan belakang.',
+                'variants' => [
+                    ['color_name' => 'Black', 'color_hex' => '#000000'],
+                    ['color_name' => 'White', 'color_hex' => '#FFFFFF'],
+                    ['color_name' => 'Grey', 'color_hex' => '#808080'],
+                    ['color_name' => 'Navy', 'color_hex' => '#1A365D'],
+                ],
                 'areas' => [
                     [
                         'view_side' => 'front',
-                        'area_name' => 'Front Chest Print Area',
-                        'width' => 26,
-                        'height' => 26,
+                        'area_name' => 'Front Print Area',
+                        'width' => 25,
+                        'height' => 30,
                     ],
                     [
                         'view_side' => 'back',
                         'area_name' => 'Back Print Area',
-                        'width' => 32,
-                        'height' => 42,
-                    ],
-                    [
-                        'view_side' => 'left_sleeve',
-                        'area_name' => 'Left Sleeve Print Area',
-                        'width' => 10,
-                        'height' => 28,
-                    ],
-                    [
-                        'view_side' => 'right_sleeve',
-                        'area_name' => 'Right Sleeve Print Area',
-                        'width' => 10,
-                        'height' => 28,
+                        'width' => 30,
+                        'height' => 40,
                     ],
                 ],
             ],
@@ -98,11 +66,10 @@ class ShirtSeeder extends Seeder
 
         foreach ($products as $product) {
             $shirt = Shirt::updateOrCreate(
-                ['name' => $product['name']],
+                ['type' => $product['type']],
                 [
-                    'type' => $product['type'],
+                    'name' => $product['name'],
                     'description' => $product['description'],
-                    'model_3d_path' => $product['model_3d_path'],
                     'is_active' => true,
                 ]
             );
