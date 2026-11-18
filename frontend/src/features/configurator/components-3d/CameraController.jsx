@@ -16,7 +16,6 @@ export default function CameraController({
   cameraView = 'front',
   cameraZoom = 1.0,
   cameraResetTrigger = 0,
-  autoRotate = false,
 }) {
   const controlsRef = useRef(null)
   const targetPositionRef = useRef(new THREE.Vector3(0, 0.08, 3.45))
@@ -54,8 +53,6 @@ export default function CameraController({
       enablePan
       enableZoom
       enableRotate
-      autoRotate={Boolean(autoRotate)}
-      autoRotateSpeed={2.2}
       minDistance={1.65}
       maxDistance={5.8}
       minPolarAngle={Math.PI / 4}
