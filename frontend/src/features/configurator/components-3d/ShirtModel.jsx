@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js'
@@ -834,7 +833,6 @@ export default function ShirtModel({
   designPreview = null,
   activeSide = 'front',
   materialEffects = {},
-  motion = {},
   onSceneReady,
 }) {
   const groupRef = useRef(null)
@@ -971,156 +969,6 @@ export default function ShirtModel({
     )
   }, [color, materialEffects])
 
-  const knitProgressRef = useRef(0)
-
-  // Animasi real-time 60 FPS yang ringan untuk model high-poly maupun low-poly
-  useFrame((state, delta) => {
-    const group = groupRef.current
-    const bodyGeoms = preparedModel.bodyGeometries
-    if (!group || !bodyGeoms || bodyGeoms.length === 0) return
-
-    const deformableGeoms = [
-      ...bodyGeoms,
-      ...Object.values(preparedModel.printMeshes || {}),
-    ]
-
-    const mode = motion?.mode || 'static'
-    const isPlaying = motion?.isPlaying !== false
-    const speed = Number(motion?.speed) || 1.0
-    const t = state.clock.getElapsedTime() * speed
-    const canDeformVertices = preparedModel.totalVertices <= 15000
-
-    if (!isPlaying || mode === 'static') {
-      group.position.set(0, 0, 0)
-      group.rotation.set(0, 0, 0)
-      group.scale.set(1, 1, 1)
-
-      if (wasDeformedRef.current) {
-        deformableGeoms.forEach((geom) => {
-          const posAttr = geom?.attributes?.position
-          const basePos = geom?.userData?.basePositions
-          if (basePos && posAttr) {
-            posAttr.array.set(basePos)
-            posAttr.needsUpdate = true
-          }
-        })
-        wasDeformedRef.current = false
-      }
-      return
-    }
-
-    if (mode === 'waves') {
-      group.position.set(0, Math.sin(t * 1.8) * 0.02, 0)
-      group.rotation.set(
-        Math.sin(t * 1.3) * 0.03,
-        Math.sin(t * 0.9) * 0.06,
-        Math.cos(t * 1.1) * 0.02
-      )
-      group.scale.set(
-        1 + Math.sin(t * 2.2) * 0.012,
-        1 + Math.cos(t * 1.8) * 0.008,
-        1 + Math.sin(t * 2.6) * 0.018
-      )
-
-      if (canDeformVertices) {
-        wasDeformedRef.current = true
-        deformableGeoms.forEach((geom) => {
-          const posAttr = geom?.attributes?.position
-          const basePos = geom?.userData?.basePositions
-          if (!basePos || !posAttr) return
-
-          const arr = posAttr.array
-          for (let i = 0; i < arr.length; i += 3) {
-            const bx = basePos[i]
-            const by = basePos[i + 1]
-            const bz = basePos[i + 2]
-            const hemFactor = Math.max(0, (0.65 - by) / 1.6)
-            const waveZ =
-              Math.sin(bx * 5.0 + t * 3.8) *
-              Math.cos(by * 3.5 - t * 2.6) *
-              0.032 *
-              hemFactor
-            const waveX = Math.cos(by * 4.0 + t * 3.0) * 0.012 * hemFactor
-            arr[i] = bx + waveX
-            arr[i + 1] = by
-            arr[i + 2] = bz + waveZ
-          }
-          posAttr.needsUpdate = true
-        })
-      }
-    } else if (mode === 'walk') {
-      const bounce = Math.abs(Math.sin(t * 4.2)) * 0.045
-      const sway = Math.sin(t * 2.1) * 0.03
-      const twist = Math.sin(t * 4.2) * 0.14
-      const tilt = Math.cos(t * 4.2) * 0.035
-
-      group.position.set(sway, bounce - 0.02, 0)
-      group.rotation.set(0.04, twist, tilt)
-      group.scale.set(1, 1, 1)
-
-      if (canDeformVertices) {
-        wasDeformedRef.current = true
-        deformableGeoms.forEach((geom) => {
-          const posAttr = geom?.attributes?.position
-          const basePos = geom?.userData?.basePositions
-          if (!basePos || !posAttr) return
-
-          const arr = posAttr.array
-          for (let i = 0; i < arr.length; i += 3) {
-            const bx = basePos[i]
-            const by = basePos[i + 1]
-            const bz = basePos[i + 2]
-            const armFactor = Math.max(0, (Math.abs(bx) - 0.45) / 0.5)
-            const armSwing =
-              Math.sin(t * 4.2) * (bx > 0 ? 1 : -1) * 0.09 * armFactor
-            arr[i] = bx
-            arr[i + 1] = by
-            arr[i + 2] = bz + armSwing
-          }
-          posAttr.needsUpdate = true
-        })
-      }
-    } else if (mode === 'knit') {
-      knitProgressRef.current =
-        (knitProgressRef.current + delta * 0.45 * speed) % 1.35
-      const thresholdY = -1.0 + knitProgressRef.current * 2.2
-
-      group.position.set(0, 0, 0)
-      group.rotation.set(0, Math.sin(t * 1.2) * 0.18, 0)
-      const pulse = 0.94 + Math.min(1, knitProgressRef.current) * 0.06
-      group.scale.set(pulse, pulse, pulse)
-
-      if (canDeformVertices) {
-        wasDeformedRef.current = true
-        deformableGeoms.forEach((geom) => {
-          const posAttr = geom?.attributes?.position
-          const basePos = geom?.userData?.basePositions
-          if (!basePos || !posAttr) return
-
-          const arr = posAttr.array
-          for (let i = 0; i < arr.length; i += 3) {
-            const bx = basePos[i]
-            const by = basePos[i + 1]
-            const bz = basePos[i + 2]
-            const distAbove = by - thresholdY
-            if (distAbove > 0) {
-              const shrink = Math.max(0.08, 1.0 - distAbove * 1.5)
-              const ripple = Math.sin(bx * 18 + t * 8) * 0.025
-              arr[i] = bx * shrink
-              arr[i + 1] = by + ripple
-              arr[i + 2] = bz * shrink
-            } else {
-              arr[i] = bx
-              arr[i + 1] = by
-              arr[i + 2] = bz
-            }
-          }
-          posAttr.needsUpdate = true
-        })
-      }
-    }
-  })
-
   const frontSrc =
     sidePreviews?.front || (activeSide === 'front' ? designPreview : null)
   const backSrc =
@@ -1157,7 +1005,6 @@ export default function ShirtModel({
               sheen={acidWashMap ? 0 : 0.32}
               sheenColor="#777777"
               sheenRoughness={0.9}
-              wireframe={motion?.mode === 'knit'}
               side={THREE.DoubleSide}
             />
           ) : (
