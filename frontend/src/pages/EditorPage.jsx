@@ -44,9 +44,7 @@ export default function EditorPage() {
   const setGarmentStyle = useConfiguratorStore((s) => s.setGarmentStyle)
   const setCameraView = useConfiguratorStore((s) => s.setCameraView)
   const setActiveTab = useConfiguratorStore((s) => s.setActiveTab)
-  const background = useConfiguratorStore((s) => s.background)
   const materialEffects = useConfiguratorStore((s) => s.materialEffects)
-  const motion = useConfiguratorStore((s) => s.motion)
   const restoreConfiguratorConfig = useConfiguratorStore(
     (s) => s.restoreConfiguratorConfig
   )
@@ -236,9 +234,7 @@ export default function EditorPage() {
           selected_size: selectedSize,
           selected_side: selectedSide,
           garment_style: garmentStyle,
-          background,
           material_effects: materialEffects,
-          motion,
         },
         editor_state: canvasState,
       })
