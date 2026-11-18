@@ -47,26 +47,23 @@ jobs:
       - name: Build frontend
         run: npm run build
 
-      - name: Verify optimized garment GLB assets
+      - name: Verify current garment GLB assets
         run: |
           node --input-type=module <<'NODE'
           import { readFileSync, existsSync } from 'node:fs'
 
+          // The uploaded GLBs are the active source models. They contain raw garment
+          // geometry; ShirtModel generates its print surfaces at runtime.
           const models = [
-            'public/models/tshirt-regular.glb',
-            'public/models/tshirt-oversized.glb',
-            'public/models/hoodie-classic.glb',
+            { path: 'public/models/Tshirt.glb', maxBytes: 8 * 1024 * 1024 },
+            { path: 'public/models/hoodie.glb', maxBytes: 32 * 1024 * 1024 },
           ]
           const deprecatedPaths = [
             'public/models/oversized_t-shirt.glb',
             'public/models/T SHIRT.fbx',
-          ]
-          const requiredMeshes = [
-            'Garment_Body',
-            'Print_Front',
-            'Print_Back',
-            'Print_LeftSleeve',
-            'Print_RightSleeve',
+            'public/models/tshirt-regular.glb',
+            'public/models/tshirt-oversized.glb',
+            'public/models/hoodie-classic.glb',
           ]
 
           for (const deprecatedPath of deprecatedPaths) {
@@ -75,11 +72,11 @@ jobs:
             }
           }
 
-          for (const modelPath of models) {
+          for (const { path: modelPath, maxBytes } of models) {
             const model = readFileSync(modelPath)
 
-            if (model.length > 1024 * 1024) {
-              throw new Error(`${modelPath} exceeds the 1 MiB budget: ${model.length} bytes`)
+            if (model.length > maxBytes) {
+              throw new Error(`${modelPath} exceeds its ${(maxBytes / 1024 / 1024).toFixed(0)} MiB budget: ${model.length} bytes`)
             }
             if (model.toString('ascii', 0, 4) !== 'glTF') {
               throw new Error(`${modelPath} is not a valid GLB file.`)
@@ -100,14 +97,17 @@ jobs:
             const gltf = JSON.parse(
               model.toString('utf8', 20, 20 + jsonLength).replace(/\0+$/, '').trim()
             )
-            const meshNames = new Set((gltf.meshes || []).map((mesh) => mesh.name))
-            const missingMeshes = requiredMeshes.filter((name) => !meshNames.has(name))
+            const hasRenderableMesh = (gltf.meshes || []).some((mesh) =>
+              (mesh.primitives || []).some((primitive) =>
+                Number.isInteger(primitive.attributes?.POSITION)
+              )
+            )
 
-            if (missingMeshes.length > 0) {
-              throw new Error(`${modelPath} is missing print surfaces: ${missingMeshes.join(', ')}`)
+            if (!hasRenderableMesh) {
+              throw new Error(`${modelPath} does not contain any mesh with POSITION geometry.`)
             }
 
-            console.log(`Validated ${modelPath}: GLB v${version}, ${model.length} bytes, all print meshes present.`)
+            console.log(`Validated ${modelPath}: GLB v${version}, ${model.length} bytes, renderable geometry present.`)
           }
           NODE
 
