@@ -53,9 +53,11 @@ function GarmentModel({ modelPath }) {
     const initialBounds = new THREE.Box3().setFromObject(object)
     const initialSize = initialBounds.getSize(new THREE.Vector3())
 
-    // Node transform pada GLB sudah menempatkan hoodie dalam orientasi Y-up
-    // dengan bagian depan pada +Z. Hanya koreksi model umum yang masih Z-up.
-    if (initialSize.z > initialSize.y * 1.35) {
+    if (modelPath.endsWith('/hoodie.glb')) {
+      // Samakan orientasi kartu preview dengan sumbu kanonis konfigurator.
+      object.rotation.y = Math.PI / 2
+    } else if (initialSize.z > initialSize.y * 1.35) {
+      // Model Z-up standar: ubah sumbu Z menjadi sumbu tinggi Y.
       object.rotation.x = -Math.PI / 2
     }
 
