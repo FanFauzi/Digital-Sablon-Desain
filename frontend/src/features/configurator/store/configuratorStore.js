@@ -20,11 +20,6 @@ export const GARMENT_MODELS = [
     type: 'hoodie',
     modelPath: '/models/hoodie.glb',
     candidatePaths: ['/models/hoodie.glb', '/models/hoodie-classic.glb'],
-    // The new Sketchfab GLB stores garment width on Z and depth on X.
-    // Normalize it to the configurator convention: width X, height Y, depth Z.
-    pathOrientations: {
-      '/models/hoodie.glb': 'hoodie-sketchfab',
-    },
     fallbackPath: '/models/hoodie-classic.glb',
     description: 'Model hoodie GLB untuk kustomisasi desain pada bagian depan, belakang, dan lengan.',
   },
