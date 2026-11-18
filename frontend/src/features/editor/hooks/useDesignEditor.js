@@ -3,252 +3,17 @@ import {
   Canvas,
   FabricImage,
   IText,
-  Polygon,
   Rect,
 } from 'fabric'
 
 import { EDITOR_CONFIG } from '../utils/editorConfig'
-import { getPlacementFromPreset } from '../utils/placementUtils'
-import { createAnalysisCacheKey } from '../utils/analysisCacheKey'
-import { addPngDpiMetadata } from '../utils/pngDpiMetadata'
-import {
-  PRINT_PLACEMENT_PRESETS,
-  useConfiguratorStore,
-} from '../../configurator/store/configuratorStore'
 import api from '../../../services/api'
-import {
-  buildAssetContentPath,
-  cacheAssetObjectUrl,
-  dataUrlToBlob,
-  extractAssetId,
-  fetchDesignAssetObjectUrl,
-  uploadDesignAsset,
-} from '../../../services/assetService'
-
-const SERIALIZED_OBJECT_PROPS = [
-  'editorId',
-  'editorName',
-  'uploadedAssetId',
-  'assetUrl',
-]
-
-const DEFAULT_TSHIRT_SILHOUETTE = [
-  { u: 0.36, v: 0.02 },
-  { u: 0.50, v: 0.05 },
-  { u: 0.64, v: 0.02 },
-  { u: 0.82, v: 0.08 },
-  { u: 0.98, v: 0.24 },
-  { u: 0.88, v: 0.44 },
-  { u: 0.74, v: 0.36 },
-  { u: 0.74, v: 0.97 },
-  { u: 0.26, v: 0.97 },
-  { u: 0.26, v: 0.36 },
-  { u: 0.12, v: 0.44 },
-  { u: 0.02, v: 0.24 },
-  { u: 0.18, v: 0.08 },
-]
-
-const DEFAULT_SLEEVE_SILHOUETTE = [
-  { u: 0.18, v: 0.04 },
-  { u: 0.82, v: 0.04 },
-  { u: 0.94, v: 0.94 },
-  { u: 0.06, v: 0.94 },
-]
-
-function syncPrintBoundaryGuides(
-  canvas,
-  printArea = EDITOR_CONFIG.printArea,
-  side = 'front'
-) {
-  if (!canvas) return
-
-  const existingGuides = canvas
-    .getObjects()
-    .filter((object) => object.isPrintBoundary)
-  existingGuides.forEach((guide) => canvas.remove(guide))
-
-  const guides = []
-
-  // 1. Bingkai penuh seluruh permukaan 3D model (Full Surface Boundary)
-  const outerFrame = new Rect({
-    left: printArea.left,
-    top: printArea.top,
-    width: printArea.width,
-    height: printArea.height,
-    originX: 'left',
-    originY: 'top',
-    fill: 'rgba(0, 0, 0, 0)',
-    stroke: '#cbd5e1',
-    strokeWidth: 2,
-    strokeDashArray: [8, 6],
-    selectable: false,
-    evented: false,
-    excludeFromExport: true,
-  })
-  outerFrame.isPrintBoundary = true
-  guides.push(outerFrame)
-
-  // 2. Kontur siluet 2D pakaian asli dari model 3D agar pengguna bisa menempatkan gambar di seluruh permukaan
-  const storeSilhouettes =
-    useConfiguratorStore.getState().surfaceMapping?.silhouettes || {}
-  const rawSilhouette =
-    storeSilhouettes[side] && storeSilhouettes[side].length >= 6
-      ? storeSilhouettes[side]
-      : side === 'left_sleeve' || side === 'right_sleeve'
-        ? DEFAULT_SLEEVE_SILHOUETTE
-        : DEFAULT_TSHIRT_SILHOUETTE
-
-  const polygonPoints = rawSilhouette.map((pt) => ({
-    x: printArea.left + pt.u * printArea.width,
-    y: printArea.top + pt.v * printArea.height,
-  }))
-
-  const silhouettePolygon = new Polygon(polygonPoints, {
-    fill: 'rgba(241, 245, 249, 0.45)',
-    stroke: '#64748b',
-    strokeWidth: 2.5,
-    strokeDashArray: [10, 6],
-    selectable: false,
-    evented: false,
-    excludeFromExport: true,
-    objectCaching: false,
-  })
-  silhouettePolygon.isPrintBoundary = true
-  guides.push(silhouettePolygon)
-
-  // 3. Panduan bantu area tengah dada/punggung (opsional visual, tidak membatasi gerak objek)
-  if (side === 'front' || side === 'back') {
-    const chestGuide = new Rect({
-      left: printArea.left + printArea.width * 0.27,
-      top: printArea.top + printArea.height * 0.16,
-      width: printArea.width * 0.46,
-      height: printArea.height * 0.72,
-      originX: 'left',
-      originY: 'top',
-      fill: 'rgba(0, 0, 0, 0)',
-      stroke: '#94a3b8',
-      strokeWidth: 1.5,
-      strokeDashArray: [6, 6],
-      selectable: false,
-      evented: false,
-      excludeFromExport: true,
-    })
-    chestGuide.isPrintBoundary = true
-    guides.push(chestGuide)
-  }
-
-  guides.forEach((guide) => {
-    canvas.add(guide)
-  })
-  // Urutkan agar seluruh panduan berada di lapisan paling belakang
-  for (let i = guides.length - 1; i >= 0; i--) {
-    canvas.sendObjectToBack(guides[i])
-  }
-}
-
-
-function fitPrintAreaToPhysicalRatio(
-  physicalWidthCm,
-  physicalHeightCm,
-  side = 'front'
-) {
-  const base = EDITOR_CONFIG.printArea
-  const storeRatios =
-    useConfiguratorStore.getState().surfaceMapping?.aspectRatios || {}
-  const modelRatio = Number(storeRatios[side])
-
-  const widthCm = Number(physicalWidthCm)
-  const heightCm = Number(physicalHeightCm)
-
-  const targetRatio =
-    Number.isFinite(modelRatio) && modelRatio > 0.25 && modelRatio < 2.5
-      ? modelRatio
-      : Number.isFinite(widthCm) &&
-          Number.isFinite(heightCm) &&
-          widthCm > 0 &&
-          heightCm > 0
-        ? widthCm / heightCm
-        : base.width / base.height
-
-  const maxRatio = base.width / base.height
-
-  let width
-  let height
-
-  if (targetRatio >= maxRatio) {
-    width = base.width
-    height = width / targetRatio
-  } else {
-    height = base.height
-    width = height * targetRatio
-  }
-
-  return {
-    left: Math.round(base.left + (base.width - width) / 2),
-    top: Math.round(base.top + (base.height - height) / 2),
-    width: Math.round(width),
-    height: Math.round(height),
-  }
-}
-
-async function imageElementToBlob(element) {
-  const width = element.naturalWidth || element.width
-  const height = element.naturalHeight || element.height
-
-  if (!width || !height) {
-    throw new Error('Gambar pada proyek tidak dapat dibaca.')
-  }
-
-  const temporaryCanvas = document.createElement('canvas')
-  temporaryCanvas.width = width
-  temporaryCanvas.height = height
-
-  const context = temporaryCanvas.getContext('2d')
-  if (!context) {
-    throw new Error('Browser tidak dapat menyiapkan gambar proyek.')
-  }
-
-  context.drawImage(element, 0, 0, width, height)
-
-  const blob = await new Promise((resolve) => {
-    temporaryCanvas.toBlob(resolve, 'image/png')
-  })
-
-  if (!blob) {
-    throw new Error('Gagal menyiapkan file gambar proyek.')
-  }
-
-  return blob
-}
-
-const MAX_UPLOAD_SIZE_BYTES = 15 * 1024 * 1024
 
 export default function useDesignEditor(canvasElement) {
   const canvasRef = useRef(null)
-  const printAreaRef = useRef({ ...EDITOR_CONFIG.printArea })
-  const printAreaSpecRef = useRef(null)
-  const activeSideRef = useRef('front')
-  const surfaceMapping = useConfiguratorStore((s) => s.surfaceMapping)
-  const sideSnapshotsRef = useRef({
-    front: null,
-    back: null,
-    left_sleeve: null,
-    right_sleeve: null,
-  })
-  const isSwitchingSideRef = useRef(false)
-  const imageAssetsRef = useRef(new Map())
-  const historyRef = useRef({ past: [], future: [], isRestoring: false })
-  const [canUndo, setCanUndo] = useState(false)
-  const [canRedo, setCanRedo] = useState(false)
 
   const [selectedObject, setSelectedObject] = useState(null)
   const [layers, setLayers] = useState([])
-
-  const [analysis, setAnalysis] = useState(null)
-  const [isAnalyzing, setIsAnalyzing] = useState(false)
-  const [analysisError, setAnalysisError] = useState('')
-  const analysisCacheRef = useRef(new Map())
-  const lastAnalyzedObjectIdRef = useRef(null)
 
   const refreshLayers = useCallback(() => {
     const canvas = canvasRef.current
@@ -272,9 +37,6 @@ export default function useDesignEditor(canvasElement) {
       return
     }
 
-    const type = String(object.type || '').toLowerCase()
-    const isText = type === 'i-text' || type === 'text' || type === 'textbox'
-
     setSelectedObject({
       id: object.editorId,
       name: object.editorName,
@@ -283,98 +45,8 @@ export default function useDesignEditor(canvasElement) {
       width: Math.round(object.getScaledWidth()),
       height: Math.round(object.getScaledHeight()),
       angle: Math.round(object.angle || 0),
-      opacity: Math.round((object.opacity ?? 1) * 100),
       type: object.type,
-      ...(isText
-        ? {
-            text: typeof object.text === 'string' ? object.text : '',
-            fill: typeof object.fill === 'string' ? object.fill : '#171717',
-            fontFamily: object.fontFamily || 'Arial',
-            fontSize: Math.round(object.fontSize || 65),
-            fontWeight: object.fontWeight || 'bold',
-          }
-        : {}),
     })
-  }, [])
-
-  const [designPreview, setDesignPreview] = useState(null)
-  const [designPreviewVersion, setDesignPreviewVersion] = useState(0)
-  const [sidePreviews, setSidePreviews] = useState({
-    front: null,
-    back: null,
-    left_sleeve: null,
-    right_sleeve: null,
-  })
-
-  const refreshDesignPreview = useCallback(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-
-    const { left, top, width, height } = printAreaRef.current
-    const previousBackground = canvas.backgroundColor
-    const printBoundaries = canvas.getObjects().filter((object) => object.isPrintBoundary)
-    const hasDesignObjects = canvas.getObjects().some((object) => !object.isPrintBoundary)
-    const currentSide = activeSideRef.current || 'front'
-
-    try {
-      if (!hasDesignObjects) {
-        setDesignPreview(null)
-        setSidePreviews((prev) => ({
-          ...prev,
-          [currentSide]: null,
-        }))
-        setDesignPreviewVersion((version) => version + 1)
-        return
-      }
-
-      // Preview transparan hanya berisi desain di area cetak tanpa garis panduan siluet.
-      canvas.backgroundColor = ''
-      printBoundaries.forEach((boundary) => {
-        boundary.visible = false
-      })
-
-      const preview = canvas.toDataURL({
-        format: 'png',
-        left,
-        top,
-        width,
-        height,
-        multiplier: 1,
-        enableRetinaScaling: false,
-      })
-      setDesignPreview(preview)
-      setSidePreviews((prev) => ({
-        ...prev,
-        [currentSide]: preview,
-      }))
-      setDesignPreviewVersion((version) => version + 1)
-    } finally {
-      printBoundaries.forEach((boundary) => {
-        boundary.visible = true
-      })
-      canvas.backgroundColor = previousBackground
-      canvas.requestRenderAll()
-    }
-  }, [])
-
-  const recordHistorySnapshot = useCallback(() => {
-    const canvas = canvasRef.current
-    if (!canvas || historyRef.current.isRestoring || isSwitchingSideRef.current) return
-
-    const designObjects = canvas
-      .getObjects()
-      .filter((object) => !object.isPrintBoundary)
-      .map((object) => object.toObject(SERIALIZED_OBJECT_PROPS))
-
-    const serialized = JSON.stringify(designObjects)
-    const past = historyRef.current.past
-    if (past.length > 0 && past[past.length - 1] === serialized) return
-
-    past.push(serialized)
-    if (past.length > 25) past.shift()
-    historyRef.current.future = []
-    setCanUndo(past.length > 1)
-    setCanRedo(false)
   }, [])
 
   useEffect(() => {
@@ -390,12 +62,28 @@ export default function useDesignEditor(canvasElement) {
 
     canvasRef.current = canvas
 
-    syncPrintBoundaryGuides(
-      canvas,
-      printAreaRef.current,
-      activeSideRef.current
-    )
-    recordHistorySnapshot()
+    // Area cetak: persegi panjang utuh.
+    const boundary = new Rect({
+      left: EDITOR_CONFIG.printArea.left,
+      top: EDITOR_CONFIG.printArea.top,
+      width: EDITOR_CONFIG.printArea.width,
+      height: EDITOR_CONFIG.printArea.height,
+      // Fabric.js 7: pastikan left/top dihitung dari sudut kiri atas.
+      originX: 'left',
+      originY: 'top',
+      fill: 'rgba(0, 0, 0, 0)',
+      stroke: '#a3a3a3',
+      strokeWidth: 3,
+      strokeDashArray: [12, 8],
+      selectable: false,
+      evented: false,
+      excludeFromExport: true,
+    })
+
+    boundary.isPrintBoundary = true
+
+    canvas.add(boundary)
+    canvas.sendObjectToBack(boundary)
 
     const handleSelection = (event) => {
       const object = event.selected?.[0] || event.target
@@ -417,32 +105,6 @@ export default function useDesignEditor(canvasElement) {
       refreshLayers()
     }
 
-    const handleObjectModified = (event) => {
-      handleObjectChanged(event)
-      refreshDesignPreview()
-      recordHistorySnapshot()
-    }
-
-    const handleObjectAddedOrRemoved = (event) => {
-      if (event?.target?.isPrintBoundary) return
-      refreshLayers()
-      refreshDesignPreview()
-      recordHistorySnapshot()
-    }
-
-    const handleTextChanged = (event) => {
-      const object = event?.target || canvas.getActiveObject()
-      if (object && typeof object.text === 'string') {
-        object.editorName = object.text.trim().slice(0, 28) || 'Teks'
-      }
-      if (object && canvas.getActiveObject() === object) {
-        syncSelectedObject(object)
-      }
-      refreshLayers()
-      refreshDesignPreview()
-      recordHistorySnapshot()
-    }
-
     canvas.on('selection:created', handleSelection)
     canvas.on('selection:updated', handleSelection)
     canvas.on('selection:cleared', handleSelectionCleared)
@@ -450,29 +112,24 @@ export default function useDesignEditor(canvasElement) {
     canvas.on('object:moving', handleObjectChanged)
     canvas.on('object:scaling', handleObjectChanged)
     canvas.on('object:rotating', handleObjectChanged)
-    canvas.on('object:modified', handleObjectModified)
-    canvas.on('object:added', handleObjectAddedOrRemoved)
-    canvas.on('object:removed', handleObjectAddedOrRemoved)
-    canvas.on('text:changed', handleTextChanged)
-    canvas.on('text:editing:exited', handleTextChanged)
+    canvas.on('object:modified', handleObjectChanged)
+
+    canvas.on('object:added', refreshLayers)
+    canvas.on('object:removed', refreshLayers)
 
     return () => {
       canvas.dispose()
       canvasRef.current = null
     }
-  }, [canvasElement, recordHistorySnapshot, refreshLayers, refreshDesignPreview, syncSelectedObject])
+  }, [canvasElement, refreshLayers, syncSelectedObject])
 
   const uploadImage = useCallback(async (file) => {
     const canvas = canvasRef.current
 
     if (!canvas || !file) return
 
-    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
-      throw new Error('Format gambar harus PNG, JPG, atau WEBP.')
-    }
-
-    if (file.size > MAX_UPLOAD_SIZE_BYTES) {
-      throw new Error('Ukuran gambar maksimal 15 MB.')
+    if (!['image/png', 'image/jpeg'].includes(file.type)) {
+      throw new Error('Format gambar harus PNG atau JPG.')
     }
 
     const url = URL.createObjectURL(file)
@@ -503,19 +160,8 @@ export default function useDesignEditor(canvasElement) {
         padding: 5,
       })
 
-      const editorId = crypto.randomUUID()
-      image.editorId = editorId
+      image.editorId = crypto.randomUUID()
       image.editorName = file.name
-      image.uploadedAssetId = null
-      image.assetUrl = null
-
-      imageAssetsRef.current.set(editorId, {
-        file,
-        objectUrl: url,
-        uploadedAssetId: null,
-        assetUrl: null,
-        originalName: file.name,
-      })
 
       canvas.add(image)
       canvas.setActiveObject(image)
@@ -523,9 +169,8 @@ export default function useDesignEditor(canvasElement) {
 
       syncSelectedObject(image)
       refreshLayers()
-    } catch (error) {
+    } finally {
       URL.revokeObjectURL(url)
-      throw error
     }
   }, [refreshLayers, syncSelectedObject])
 
@@ -555,34 +200,6 @@ export default function useDesignEditor(canvasElement) {
     refreshLayers()
   }, [refreshLayers, syncSelectedObject])
 
-  const duplicateSelected = useCallback(async () => {
-    const canvas = canvasRef.current
-    const active = canvas?.getActiveObject()
-    if (!canvas || !active || active.isPrintBoundary) return
-
-    const cloned = await active.clone(SERIALIZED_OBJECT_PROPS)
-    const newId = crypto.randomUUID()
-    cloned.set({
-      left: (active.left || 500) + 32,
-      top: (active.top || 600) + 32,
-    })
-    cloned.editorId = newId
-    cloned.editorName = `${active.editorName || 'Objek'} (Copy)`
-
-    if (active.editorId && imageAssetsRef.current.has(active.editorId)) {
-      const sourceMeta = imageAssetsRef.current.get(active.editorId)
-      imageAssetsRef.current.set(newId, { ...sourceMeta })
-    }
-
-    canvas.add(cloned)
-    canvas.setActiveObject(cloned)
-    canvas.requestRenderAll()
-
-    syncSelectedObject(cloned)
-    refreshLayers()
-    refreshDesignPreview()
-  }, [refreshDesignPreview, refreshLayers, syncSelectedObject])
-
   const deleteSelected = useCallback(() => {
     const canvas = canvasRef.current
     const active = canvas?.getActiveObject()
@@ -608,9 +225,7 @@ export default function useDesignEditor(canvasElement) {
 
     canvas.requestRenderAll()
     syncSelectedObject(active)
-    refreshDesignPreview()
-    recordHistorySnapshot()
-  }, [recordHistorySnapshot, refreshDesignPreview, syncSelectedObject])
+  }, [syncSelectedObject])
 
   const moveLayer = useCallback((id, direction) => {
     const canvas = canvasRef.current
@@ -640,9 +255,7 @@ export default function useDesignEditor(canvasElement) {
 
     syncSelectedObject(object)
     refreshLayers()
-    refreshDesignPreview()
-    recordHistorySnapshot()
-  }, [recordHistorySnapshot, refreshDesignPreview, refreshLayers, syncSelectedObject])
+  }, [refreshLayers, syncSelectedObject])
 
   const selectLayer = useCallback((id) => {
     const canvas = canvasRef.current
@@ -664,23 +277,6 @@ export default function useDesignEditor(canvasElement) {
 
     if (!canvas || !active || active.isPrintBoundary) return
 
-    if (['text', 'fill', 'fontFamily', 'fontWeight'].includes(property)) {
-      const stringValue = String(value ?? '')
-      active.set(property, stringValue)
-
-      if (property === 'text') {
-        active.editorName = stringValue.trim().slice(0, 28) || 'Teks'
-        refreshLayers()
-      }
-
-      active.setCoords()
-      canvas.requestRenderAll()
-      syncSelectedObject(active)
-      refreshDesignPreview()
-      recordHistorySnapshot()
-      return
-    }
-
     const number = Number(value)
     if (!Number.isFinite(number)) return
 
@@ -697,12 +293,6 @@ export default function useDesignEditor(canvasElement) {
         scaleX: active.scaleX * ratio,
         scaleY: active.scaleY * ratio,
       })
-    } else if (property === 'fontSize') {
-      const clampedSize = Math.min(300, Math.max(10, number))
-      active.set('fontSize', clampedSize)
-    } else if (property === 'opacity') {
-      const clampedOpacity = Math.min(1, Math.max(0.05, number / 100))
-      active.set('opacity', clampedOpacity)
     } else {
       active.set(property, number)
     }
@@ -710,681 +300,18 @@ export default function useDesignEditor(canvasElement) {
     active.setCoords()
     canvas.requestRenderAll()
     syncSelectedObject(active)
-    refreshDesignPreview()
-    recordHistorySnapshot()
-  }, [recordHistorySnapshot, refreshDesignPreview, refreshLayers, syncSelectedObject])
+  }, [syncSelectedObject])
 
-  const setPrintArea = useCallback((printAreaData) => {
+  const [analysis, setAnalysis] = useState(null)
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [analysisError, setAnalysisError] = useState('')
+
+  const analyzeSelectedImage = useCallback(async () => {
     const canvas = canvasRef.current
-    if (!canvas) return
+    const active = canvas?.getActiveObject()
 
-    if (printAreaData) {
-      printAreaSpecRef.current = printAreaData
-    }
-    const spec = printAreaData || printAreaSpecRef.current || {}
-    const currentSide = activeSideRef.current || 'front'
-
-    const fittedArea = fitPrintAreaToPhysicalRatio(
-      spec.physical_width_cm,
-      spec.physical_height_cm,
-      currentSide
-    )
-
-    printAreaRef.current = fittedArea
-    syncPrintBoundaryGuides(canvas, fittedArea, currentSide)
-
-    canvas.requestRenderAll()
-    refreshDesignPreview()
-  }, [refreshDesignPreview])
-
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const spec = printAreaSpecRef.current || {}
-    const currentSide = activeSideRef.current || 'front'
-    const fittedArea = fitPrintAreaToPhysicalRatio(
-      spec.physical_width_cm,
-      spec.physical_height_cm,
-      currentSide
-    )
-    printAreaRef.current = fittedArea
-    syncPrintBoundaryGuides(canvas, fittedArea, currentSide)
-    canvas.requestRenderAll()
-    refreshDesignPreview()
-  }, [surfaceMapping, refreshDesignPreview])
-
-  const serializeCurrentCanvas = useCallback(async () => {
-    const canvas = canvasRef.current
-
-    if (!canvas) {
-      throw new Error('Kanvas desain belum siap untuk disimpan.')
-    }
-
-    const snapshot = canvas.toObject(SERIALIZED_OBJECT_PROPS)
-    const designObjects = canvas.getObjects()
-      .filter((object) => !object.isPrintBoundary)
-
-    snapshot.objects = await Promise.all(
-      designObjects.map(async (object) => {
-        const serialized = object.toObject(SERIALIZED_OBJECT_PROPS)
-
-        if (String(object.type || '').toLowerCase() === 'image') {
-          const editorId = object.editorId || serialized.editorId || crypto.randomUUID()
-          object.editorId = editorId
-          serialized.editorId = editorId
-
-          const existingMeta = imageAssetsRef.current.get(editorId) || null
-          const assetId =
-            extractAssetId(object) ||
-            extractAssetId(serialized) ||
-            existingMeta?.uploadedAssetId ||
-            null
-
-          if (assetId) {
-            const contentPath = buildAssetContentPath(assetId)
-            object.uploadedAssetId = assetId
-            object.assetUrl = contentPath
-            serialized.uploadedAssetId = assetId
-            serialized.assetUrl = contentPath
-          }
-
-          if (existingMeta?.objectUrl) {
-            serialized.src = existingMeta.objectUrl
-          } else if (
-            typeof serialized.src === 'string' &&
-            (serialized.src.startsWith('blob:') ||
-              serialized.src.startsWith('data:image/') ||
-              extractAssetId(serialized.src))
-          ) {
-            // Gunakan src yang sudah ada tanpa merender ulang ke Base64 PNG.
-          } else if (typeof object.getElement === 'function') {
-            const blob = await imageElementToBlob(object.getElement())
-            const objectUrl = URL.createObjectURL(blob)
-
-            imageAssetsRef.current.set(editorId, {
-              file: blob,
-              objectUrl,
-              uploadedAssetId: assetId,
-              assetUrl: assetId ? buildAssetContentPath(assetId) : null,
-              originalName: object.editorName || 'design-image.png',
-            })
-
-            serialized.src = objectUrl
-          }
-
-          serialized.crossOrigin = undefined
-        }
-
-        return serialized
-      })
-    )
-    snapshot.background = '#ffffff'
-
-    return snapshot
-  }, [])
-
-  const hydrateSnapshotForCanvas = useCallback(async (snapshot) => {
-    if (!snapshot || !Array.isArray(snapshot.objects)) {
-      return snapshot
-    }
-
-    const hydratedObjects = await Promise.all(
-      snapshot.objects.map(async (object) => {
-        if (!object || String(object.type || '').toLowerCase() !== 'image') {
-          return object
-        }
-
-        const editorId = object.editorId || crypto.randomUUID()
-        const existingMeta = imageAssetsRef.current.get(editorId) || null
-        const assetId = extractAssetId(object) || existingMeta?.uploadedAssetId || null
-
-        const existingAssetMatches =
-          !assetId || Number(existingMeta?.uploadedAssetId) === Number(assetId)
-
-        if (existingMeta?.objectUrl && existingAssetMatches) {
-          return {
-            ...object,
-            editorId,
-            uploadedAssetId: assetId || existingMeta.uploadedAssetId || null,
-            assetUrl: assetId ? buildAssetContentPath(assetId) : existingMeta.assetUrl || null,
-            src: existingMeta.objectUrl,
-            crossOrigin: undefined,
-          }
-        }
-
-        if (assetId) {
-          const objectUrl = await fetchDesignAssetObjectUrl(assetId)
-          const contentPath = buildAssetContentPath(assetId)
-
-          imageAssetsRef.current.set(editorId, {
-            file: null,
-            objectUrl,
-            uploadedAssetId: assetId,
-            assetUrl: contentPath,
-            originalName: object.editorName || 'design-image.png',
-          })
-
-          return {
-            ...object,
-            editorId,
-            uploadedAssetId: assetId,
-            assetUrl: contentPath,
-            src: objectUrl,
-            crossOrigin: undefined,
-          }
-        }
-
-        return {
-          ...object,
-          editorId,
-          crossOrigin: undefined,
-        }
-      })
-    )
-
-    return {
-      ...snapshot,
-      objects: hydratedObjects,
-    }
-  }, [])
-
-  const applyCanvasSnapshot = useCallback(async (snapshot) => {
-    const canvas = canvasRef.current
-
-    if (!canvas) {
-      throw new Error('Kanvas desain belum siap.')
-    }
-
-    canvas.discardActiveObject()
-    canvas.clear()
-
-    if (snapshot) {
-      if (!Array.isArray(snapshot.objects)) {
-        throw new Error('Data desain pada sisi ini tidak valid.')
-      }
-
-      const hydratedSnapshot = await hydrateSnapshotForCanvas(snapshot)
-      await canvas.loadFromJSON(hydratedSnapshot)
-    }
-
-    canvas.backgroundColor = '#ffffff'
-
-    syncPrintBoundaryGuides(canvas, printAreaRef.current, activeSideRef.current)
-    canvas.requestRenderAll()
-
-    setSelectedObject(null)
-    refreshLayers()
-    refreshDesignPreview()
-  }, [hydrateSnapshotForCanvas, refreshDesignPreview, refreshLayers])
-
-  const prepareSnapshotForCloud = useCallback(async (snapshot, isCurrentActiveSide = false) => {
-    if (!snapshot || !Array.isArray(snapshot.objects)) {
-      return {
-        memorySnapshot: snapshot,
-        cloudSnapshot: snapshot,
-      }
-    }
-
-    const canvas = canvasRef.current
-    const memoryObjects = []
-    const cloudObjects = []
-
-    for (const object of snapshot.objects) {
-      if (!object || String(object.type || '').toLowerCase() !== 'image') {
-        memoryObjects.push(object)
-        cloudObjects.push(object)
-        continue
-      }
-
-      const editorId = object.editorId || crypto.randomUUID()
-      const existingMeta = imageAssetsRef.current.get(editorId) || null
-      let assetId = extractAssetId(object) || existingMeta?.uploadedAssetId || null
-
-      if (!assetId) {
-        let blobToUpload = existingMeta?.file instanceof Blob ? existingMeta.file : null
-
-        if (!blobToUpload && typeof object.src === 'string') {
-          if (object.src.startsWith('data:image/')) {
-            blobToUpload = dataUrlToBlob(object.src)
-          } else if (object.src.startsWith('blob:')) {
-            const blobResponse = await fetch(object.src)
-            blobToUpload = await blobResponse.blob()
-          }
-        }
-
-        if (!blobToUpload && isCurrentActiveSide && canvas) {
-          const liveObject = canvas.getObjects().find((item) => item.editorId === editorId)
-          if (liveObject && typeof liveObject.getElement === 'function') {
-            blobToUpload = await imageElementToBlob(liveObject.getElement())
-          }
-        }
-
-        if (!blobToUpload) {
-          throw new Error('File gambar desain tidak ditemukan untuk diunggah ke server.')
-        }
-
-        const fileName =
-          object.editorName ||
-          existingMeta?.originalName ||
-          'design-image.png'
-
-        const uploadedAsset = await uploadDesignAsset(blobToUpload, fileName)
-        assetId = Number(uploadedAsset.id)
-
-        const contentPath = uploadedAsset.url || buildAssetContentPath(assetId)
-        const objectUrl = existingMeta?.objectUrl || URL.createObjectURL(blobToUpload)
-
-        cacheAssetObjectUrl(assetId, objectUrl, blobToUpload)
-        imageAssetsRef.current.set(editorId, {
-          file: blobToUpload,
-          objectUrl,
-          uploadedAssetId: assetId,
-          assetUrl: contentPath,
-          originalName: fileName,
-        })
-
-        if (isCurrentActiveSide && canvas) {
-          const liveObject = canvas.getObjects().find((item) => item.editorId === editorId)
-          if (liveObject) {
-            liveObject.uploadedAssetId = assetId
-            liveObject.assetUrl = contentPath
-          }
-        }
-      }
-
-      const contentPath = buildAssetContentPath(assetId)
-      const latestMeta = imageAssetsRef.current.get(editorId) || existingMeta
-
-      memoryObjects.push({
-        ...object,
-        editorId,
-        uploadedAssetId: assetId,
-        assetUrl: contentPath,
-        src: latestMeta?.objectUrl || object.src || contentPath,
-        crossOrigin: undefined,
-      })
-
-      cloudObjects.push({
-        ...object,
-        editorId,
-        uploadedAssetId: assetId,
-        assetUrl: contentPath,
-        src: contentPath,
-        crossOrigin: undefined,
-      })
-    }
-
-    return {
-      memorySnapshot: {
-        ...snapshot,
-        objects: memoryObjects,
-      },
-      cloudSnapshot: {
-        ...snapshot,
-        objects: cloudObjects,
-      },
-    }
-  }, [])
-
-  // Format proyek versi 2 menyimpan canvas depan, belakang, lengan kiri, dan lengan kanan secara terpisah.
-  // Gambar diunggah terpisah sebagai file aset agar payload JSON tidak memuat Base64 besar.
-  const serializeCanvas = useCallback(async () => {
-    const activeSide = activeSideRef.current
-    const activeSnapshot = await serializeCurrentCanvas()
-    const rawSides = {
-      ...sideSnapshotsRef.current,
-      [activeSide]: activeSnapshot,
-    }
-
-    const frontPrepared = await prepareSnapshotForCloud(
-      rawSides.front,
-      activeSide === 'front'
-    )
-    const backPrepared = await prepareSnapshotForCloud(
-      rawSides.back,
-      activeSide === 'back'
-    )
-    const leftSleevePrepared = await prepareSnapshotForCloud(
-      rawSides.left_sleeve,
-      activeSide === 'left_sleeve'
-    )
-    const rightSleevePrepared = await prepareSnapshotForCloud(
-      rawSides.right_sleeve,
-      activeSide === 'right_sleeve'
-    )
-
-    sideSnapshotsRef.current = {
-      front: frontPrepared.memorySnapshot,
-      back: backPrepared.memorySnapshot,
-      left_sleeve: leftSleevePrepared.memorySnapshot,
-      right_sleeve: rightSleevePrepared.memorySnapshot,
-    }
-
-    return {
-      schemaVersion: 2,
-      activeSide,
-      sides: {
-        front: frontPrepared.cloudSnapshot,
-        back: backPrepared.cloudSnapshot,
-        left_sleeve: leftSleevePrepared.cloudSnapshot,
-        right_sleeve: rightSleevePrepared.cloudSnapshot,
-      },
-    }
-  }, [prepareSnapshotForCloud, serializeCurrentCanvas])
-
-  // Tetap mendukung proyek lama yang hanya menyimpan satu snapshot canvas.
-  const restoreCanvas = useCallback(async (snapshot, preferredSide = 'front') => {
-    const isMultiSideSnapshot = snapshot?.schemaVersion === 2
-
-    if (
-      !snapshot ||
-      (isMultiSideSnapshot
-        ? !snapshot.sides || typeof snapshot.sides !== 'object'
-        : !Array.isArray(snapshot.objects))
-    ) {
-      throw new Error('Data proyek tidak valid atau kanvas belum siap.')
-    }
-
-    const validSides = ['front', 'back', 'left_sleeve', 'right_sleeve']
-    const requestedSide = validSides.includes(preferredSide) ? preferredSide : 'front'
-
-    // Cache lokal per editorId tidak boleh membawa gambar dari proyek yang
-    // sebelumnya dibuka, terutama ketika dua proyek memiliki editorId yang sama.
-    imageAssetsRef.current.clear()
-    analysisCacheRef.current.clear()
-    lastAnalyzedObjectIdRef.current = null
-    setAnalysis(null)
-    setAnalysisError('')
-    setDesignPreview(null)
-    setSidePreviews({
-      front: null,
-      back: null,
-      left_sleeve: null,
-      right_sleeve: null,
-    })
-
-    if (isMultiSideSnapshot) {
-      sideSnapshotsRef.current = {
-        front: snapshot.sides.front || null,
-        back: snapshot.sides.back || null,
-        left_sleeve: snapshot.sides.left_sleeve || null,
-        right_sleeve: snapshot.sides.right_sleeve || null,
-      }
-      activeSideRef.current = requestedSide
-    } else {
-      sideSnapshotsRef.current = {
-        front: null,
-        back: null,
-        left_sleeve: null,
-        right_sleeve: null,
-      }
-      sideSnapshotsRef.current[requestedSide] = snapshot
-      activeSideRef.current = requestedSide
-    }
-
-    await applyCanvasSnapshot(sideSnapshotsRef.current[activeSideRef.current])
-  }, [applyCanvasSnapshot])
-
-  const switchDesignSide = useCallback(async (nextSide, printAreaData) => {
-    const validSides = ['front', 'back', 'left_sleeve', 'right_sleeve']
-    if (!validSides.includes(nextSide)) {
-      throw new Error('Sisi desain tidak dikenal.')
-    }
-
-    if (isSwitchingSideRef.current) return false
-
-    if (nextSide === activeSideRef.current) {
-      if (printAreaData) setPrintArea(printAreaData)
-      return true
-    }
-
-    const previousSide = activeSideRef.current
-    let previousSnapshot = null
-    isSwitchingSideRef.current = true
-
-    try {
-      previousSnapshot = await serializeCurrentCanvas()
-      sideSnapshotsRef.current = {
-        ...sideSnapshotsRef.current,
-        [previousSide]: previousSnapshot,
-      }
-
-      activeSideRef.current = nextSide
-      await applyCanvasSnapshot(sideSnapshotsRef.current[nextSide])
-
-      if (printAreaData) setPrintArea(printAreaData)
-      historyRef.current = { past: [], future: [], isRestoring: false }
-      recordHistorySnapshot()
-      return true
-    } catch (error) {
-      // Jika pemuatan sisi tujuan gagal, kembalikan canvas ke sisi sebelumnya.
-      if (previousSnapshot) {
-        activeSideRef.current = previousSide
-        sideSnapshotsRef.current = {
-          ...sideSnapshotsRef.current,
-          [previousSide]: previousSnapshot,
-        }
-        await applyCanvasSnapshot(previousSnapshot)
-      }
-
-      throw error
-    } finally {
-      isSwitchingSideRef.current = false
-    }
-  }, [applyCanvasSnapshot, recordHistorySnapshot, serializeCurrentCanvas, setPrintArea])
-
-  const resetSideDesigns = useCallback(async (frontPrintArea) => {
-    sideSnapshotsRef.current = {
-      front: null,
-      back: null,
-      left_sleeve: null,
-      right_sleeve: null,
-    }
-    activeSideRef.current = 'front'
-    setSidePreviews({
-      front: null,
-      back: null,
-      left_sleeve: null,
-      right_sleeve: null,
-    })
-    setDesignPreview(null)
-    setAnalysis(null)
-    setAnalysisError('')
-    historyRef.current = { past: [], future: [], isRestoring: false }
-    setCanUndo(false)
-    setCanRedo(false)
-    await applyCanvasSnapshot(null)
-
-    if (frontPrintArea) setPrintArea(frontPrintArea)
-    recordHistorySnapshot()
-  }, [applyCanvasSnapshot, recordHistorySnapshot, setPrintArea])
-
-  const undo = useCallback(async () => {
-    const past = historyRef.current.past
-    if (past.length <= 1 || historyRef.current.isRestoring) return
-
-    historyRef.current.isRestoring = true
-    try {
-      const current = past.pop()
-      historyRef.current.future.push(current)
-      const previousObjects = JSON.parse(past[past.length - 1] || '[]')
-      await applyCanvasSnapshot({ objects: previousObjects })
-      setCanUndo(past.length > 1)
-      setCanRedo(historyRef.current.future.length > 0)
-    } finally {
-      historyRef.current.isRestoring = false
-    }
-  }, [applyCanvasSnapshot])
-
-  const redo = useCallback(async () => {
-    const future = historyRef.current.future
-    if (future.length === 0 || historyRef.current.isRestoring) return
-
-    historyRef.current.isRestoring = true
-    try {
-      const nextSerialized = future.pop()
-      historyRef.current.past.push(nextSerialized)
-      const nextObjects = JSON.parse(nextSerialized || '[]')
-      await applyCanvasSnapshot({ objects: nextObjects })
-      setCanUndo(historyRef.current.past.length > 1)
-      setCanRedo(future.length > 0)
-    } finally {
-      historyRef.current.isRestoring = false
-    }
-  }, [applyCanvasSnapshot])
-
-  const applyRecommendedPlacement = useCallback((customPlacement = null, preferredEditorId = null) => {
-    const canvas = canvasRef.current
-    if (!canvas) {
-      throw new Error('Kanvas desain belum siap.')
-    }
-
-    let placement = customPlacement || analysis?.recommendations?.placement
-    if (customPlacement?.placementZone && !customPlacement.width_percent) {
-      placement = getPlacementFromPreset(
-        customPlacement.placementZone,
-        PRINT_PLACEMENT_PRESETS
-      )
-    }
-
-    if (!placement) {
-      throw new Error('Belum ada rekomendasi penempatan yang tersedia.')
-    }
-
-    const active = canvas.getActiveObject()
-    const allDesignObjects = canvas
-      .getObjects()
-      .filter((item) => !item.isPrintBoundary)
-    const allImages = allDesignObjects.filter(
-      (item) => String(item.type || '').toLowerCase() === 'image'
-    )
-
-    const lookupId = preferredEditorId || lastAnalyzedObjectIdRef.current
-    const targetObject =
-      (lookupId && allDesignObjects.find((item) => item.editorId === lookupId)) ||
-      (active && !active.isPrintBoundary ? active : null) ||
-      allImages[0] ||
-      allDesignObjects[0] ||
-      null
-
-    if (!targetObject || !targetObject.width || !targetObject.height) {
-      throw new Error('Tambahkan atau pilih objek desain pada kanvas terlebih dahulu.')
-    }
-
-    const printArea = printAreaRef.current
-    const widthPercent = Math.min(98, Math.max(8, Number(placement.width_percent) || 50))
-    const posXPercent = Math.min(97, Math.max(3, Number(placement.position_x_percent) || 50))
-    const posYPercent = Math.min(97, Math.max(3, Number(placement.position_y_percent) || 40))
-
-    const desiredWidth = (widthPercent / 100) * printArea.width
-    const maxAllowedHeight = printArea.height * 0.98
-    const scaleByWidth = desiredWidth / targetObject.width
-    const scaleByHeight = maxAllowedHeight / targetObject.height
-    const nextScale = Math.min(scaleByWidth, scaleByHeight)
-
-    const scaledWidth = targetObject.width * nextScale
-    const scaledHeight = targetObject.height * nextScale
-
-    const rawCenterX = printArea.left + (posXPercent / 100) * printArea.width
-    const rawCenterY = printArea.top + (posYPercent / 100) * printArea.height
-
-    const minCenterX = printArea.left + scaledWidth / 2
-    const maxCenterX = printArea.left + printArea.width - scaledWidth / 2
-    const minCenterY = printArea.top + scaledHeight / 2
-    const maxCenterY = printArea.top + printArea.height - scaledHeight / 2
-
-    const clampedCenterX =
-      minCenterX <= maxCenterX
-        ? Math.min(maxCenterX, Math.max(minCenterX, rawCenterX))
-        : printArea.left + printArea.width / 2
-
-    const clampedCenterY =
-      minCenterY <= maxCenterY
-        ? Math.min(maxCenterY, Math.max(minCenterY, rawCenterY))
-        : printArea.top + printArea.height / 2
-
-    targetObject.set({
-      originX: 'center',
-      originY: 'center',
-      left: clampedCenterX,
-      top: clampedCenterY,
-      scaleX: nextScale,
-      scaleY: nextScale,
-      angle: 0,
-    })
-
-    targetObject.setCoords()
-    canvas.setActiveObject(targetObject)
-    canvas.requestRenderAll()
-
-    syncSelectedObject(targetObject)
-    refreshLayers()
-    refreshDesignPreview()
-    recordHistorySnapshot()
-
-    return {
-      area: placement.area,
-      position_code: placement.position_code,
-      position_x_percent: posXPercent,
-      position_y_percent: posYPercent,
-      width_percent: widthPercent,
-      left: Math.round(clampedCenterX),
-      top: Math.round(clampedCenterY),
-      width: Math.round(scaledWidth),
-      height: Math.round(scaledHeight),
-    }
-  }, [analysis, recordHistorySnapshot, refreshDesignPreview, refreshLayers, syncSelectedObject])
-
-  const analyzeSelectedImage = useCallback(async (options = {}) => {
-    const canvas = canvasRef.current
-    if (!canvas) {
-      throw new Error('Kanvas desain belum siap.')
-    }
-
-    const active = canvas.getActiveObject()
-    const targetImage =
-      active && String(active.type || '').toLowerCase() === 'image'
-        ? active
-        : canvas
-            .getObjects()
-            .find((item) => !item.isPrintBoundary && String(item.type || '').toLowerCase() === 'image')
-
-    if (!targetImage || typeof targetImage.getElement !== 'function') {
-      throw new Error('Unggah atau pilih objek gambar terlebih dahulu untuk dianalisis.')
-    }
-
-    if (active !== targetImage) {
-      canvas.setActiveObject(targetImage)
-      canvas.requestRenderAll()
-      syncSelectedObject(targetImage)
-    }
-
-    const {
-      forceRefresh = false,
-      autoApply = true,
-      shirtType = 'tshirt',
-      currentSide = activeSideRef.current,
-      currentColor = '#ffffff',
-      projectId = null,
-    } = options
-
-    const objectEditorId = targetImage.editorId || null
-    lastAnalyzedObjectIdRef.current = objectEditorId
-    const cacheKey = createAnalysisCacheKey({
-      editorId: objectEditorId,
-      currentSide,
-      shirtType,
-      currentColor,
-    })
-
-    if (!forceRefresh && cacheKey && analysisCacheRef.current.has(cacheKey)) {
-      const cachedResult = analysisCacheRef.current.get(cacheKey)
-      setAnalysisError('')
-      setAnalysis(cachedResult)
-      if (autoApply && cachedResult?.recommendations?.placement) {
-        applyRecommendedPlacement(cachedResult.recommendations.placement, objectEditorId)
-      }
-      return cachedResult
+    if (!active || active.type !== 'image' || typeof active.getElement !== 'function') {
+      throw new Error('Pilih objek gambar terlebih dahulu untuk dianalisis.')
     }
 
     setIsAnalyzing(true)
@@ -1392,34 +319,17 @@ export default function useDesignEditor(canvasElement) {
     setAnalysis(null)
 
     try {
-      const source = targetImage.getElement()
-      const rawWidth = source.naturalWidth || source.width
-      const rawHeight = source.naturalHeight || source.height
+      const source = active.getElement()
+      const imageCanvas = document.createElement('canvas')
+      imageCanvas.width = source.naturalWidth || source.width
+      imageCanvas.height = source.naturalHeight || source.height
 
-      if (!rawWidth || !rawHeight) {
+      if (!imageCanvas.width || !imageCanvas.height) {
         throw new Error('Gambar tidak dapat dibaca oleh browser.')
       }
 
-      // Batasi dimensi gambar analisis maksimal 1024px agar tidak memicu HTTP 413 atau timeout.
-      const maxAnalysisDimension = 1024
-      const scale = Math.min(
-        maxAnalysisDimension / rawWidth,
-        maxAnalysisDimension / rawHeight,
-        1
-      )
-      const targetWidth = Math.max(1, Math.round(rawWidth * scale))
-      const targetHeight = Math.max(1, Math.round(rawHeight * scale))
-
-      const imageCanvas = document.createElement('canvas')
-      imageCanvas.width = targetWidth
-      imageCanvas.height = targetHeight
-
       const context = imageCanvas.getContext('2d')
-      if (!context) {
-        throw new Error('Browser tidak dapat menyiapkan gambar untuk analisis.')
-      }
-
-      context.drawImage(source, 0, 0, targetWidth, targetHeight)
+      context.drawImage(source, 0, 0, imageCanvas.width, imageCanvas.height)
 
       const blob = await new Promise((resolve) => imageCanvas.toBlob(resolve, 'image/png'))
 
@@ -1429,189 +339,51 @@ export default function useDesignEditor(canvasElement) {
 
       const formData = new FormData()
       formData.append('image', blob, 'design-analysis.png')
-      formData.append('shirt_type', String(shirtType || 'tshirt'))
-      formData.append('current_side', String(currentSide || activeSideRef.current || 'front'))
-      formData.append('current_color', String(currentColor || '#ffffff'))
-
-      const numericProjectId = Number(projectId)
-      if (Number.isInteger(numericProjectId) && numericProjectId > 0) {
-        formData.append('project_id', String(numericProjectId))
-      }
-
-      const assetId = extractAssetId(targetImage) || imageAssetsRef.current.get(objectEditorId)?.uploadedAssetId
-      if (Number.isInteger(Number(assetId)) && Number(assetId) > 0) {
-        formData.append('uploaded_asset_id', String(Number(assetId)))
-      }
 
       const response = await api.post('/designs/analyze', formData)
-      const result = response.data.data
-
-      if (cacheKey && result) {
-        analysisCacheRef.current.set(cacheKey, result)
-      }
-
-      setAnalysis(result)
-
-      if (autoApply && result?.recommendations?.placement) {
-        applyRecommendedPlacement(result.recommendations.placement, objectEditorId)
-      }
-
-      return result
+      setAnalysis(response.data.data)
+      return response.data.data
     } catch (error) {
       const message = error.response?.data?.message || error.message || 'Analisis AI gagal.'
       setAnalysisError(message)
-      throw new Error(message, { cause: error })
+      throw new Error(message)
     } finally {
       setIsAnalyzing(false)
     }
-  }, [applyRecommendedPlacement, syncSelectedObject, setAnalysis, setAnalysisError, setIsAnalyzing])
+  }, [])
 
-  const exportDesign = useCallback(async (options = {}) => {
+  const exportDesign = useCallback(() => {
     const canvas = canvasRef.current
 
     if (!canvas) {
       throw new Error('Kanvas desain belum siap.')
     }
 
-    const { printArea, shirtName = 'desain', side = 'front', projectId = null } = options
-    const physicalWidthCm = Number(printArea?.physical_width_cm)
-    const physicalHeightCm = Number(printArea?.physical_height_cm)
-    const dpi = Number(printArea?.dpi) || 300
-
-    if (
-      !Number.isFinite(physicalWidthCm) ||
-      !Number.isFinite(physicalHeightCm) ||
-      physicalWidthCm <= 0 ||
-      physicalHeightCm <= 0
-    ) {
-      throw new Error('Informasi ukuran fisik area cetak belum tersedia untuk produk ini.')
-    }
-
-    if (!Number.isFinite(dpi) || dpi < 72 || dpi > 600) {
-      throw new Error('DPI ekspor harus berada di antara 72 dan 600.')
-    }
-
-    const designObjects = canvas.getObjects().filter((object) => !object.isPrintBoundary)
-
-    if (designObjects.length === 0) {
-      throw new Error('Tambahkan gambar atau teks sebelum mengekspor desain.')
-    }
-
-    const { left, top, width, height } = printAreaRef.current
-    const pixelWidth = Math.round((physicalWidthCm / 2.54) * dpi)
-    const pixelHeight = Math.round((physicalHeightCm / 2.54) * dpi)
-    const totalPixels = pixelWidth * pixelHeight
-
-    // Hindari alokasi canvas yang terlalu besar dan berisiko membuat tab browser kehabisan memori.
-    if (pixelWidth > 10000 || pixelHeight > 10000 || totalPixels > 40000000) {
-      throw new Error(
-        'Resolusi ekspor terlalu besar untuk browser ini. Turunkan DPI atau kurangi ukuran fisik area cetak.'
-      )
-    }
-
-    const clippingWarnings = designObjects.filter((object) => {
-      const bounds = object.getBoundingRect()
-
-      return (
-        bounds.left < left ||
-        bounds.top < top ||
-        bounds.left + bounds.width > left + width ||
-        bounds.top + bounds.height > top + height
-      )
-    })
-
+    const { left, top, width, height } = EDITOR_CONFIG.printArea
     const previousBackground = canvas.backgroundColor
-    const printBoundaries = canvas.getObjects().filter((object) => object.isPrintBoundary)
 
     try {
+      // Hasil ekspor hanya area cetak, tanpa latar putih editor.
       canvas.backgroundColor = ''
-      printBoundaries.forEach((boundary) => {
-        boundary.visible = false
-      })
       canvas.requestRenderAll()
 
-      // Gunakan skala seragam berdasarkan lebar fisik; area cetak telah
-      // disesuaikan ke rasio fisik agar gambar tidak tertarik atau gepeng.
-      const multiplier = pixelWidth / width
-      const croppedDataUrl = canvas.toDataURL({
+      const dataUrl = canvas.toDataURL({
         format: 'png',
         left,
         top,
         width,
         height,
-        multiplier,
+        multiplier: 1,
         enableRetinaScaling: false,
       })
 
-      const sourceImage = new Image()
-      sourceImage.src = croppedDataUrl
-      await sourceImage.decode()
-
-      const outputCanvas = document.createElement('canvas')
-      outputCanvas.width = pixelWidth
-      outputCanvas.height = pixelHeight
-
-      const context = outputCanvas.getContext('2d')
-      if (!context) {
-        throw new Error('Browser tidak dapat menyiapkan kanvas ekspor.')
-      }
-
-      context.clearRect(0, 0, pixelWidth, pixelHeight)
-      context.drawImage(sourceImage, 0, 0, pixelWidth, pixelHeight)
-
-      const renderedBlob = await new Promise((resolve, reject) => {
-        outputCanvas.toBlob((blob) => {
-          if (blob) resolve(blob)
-          else reject(new Error('Browser gagal membuat file PNG.'))
-        }, 'image/png')
-      })
-
-      const finalBlob = await addPngDpiMetadata(renderedBlob, dpi)
-      const safeName = String(shirtName)
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '') || 'desain'
-      const fileName = `digital-sablon-${safeName}-${side}-${dpi}dpi-${Date.now()}.png`
-      const objectUrl = URL.createObjectURL(finalBlob)
-
       const link = document.createElement('a')
-      link.href = objectUrl
-      link.download = fileName
+      link.href = dataUrl
+      link.download = `digital-sablon-desain-${Date.now()}.png`
       document.body.appendChild(link)
       link.click()
       link.remove()
-      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
-
-      const numericProjectId = Number(projectId)
-      if (Number.isInteger(numericProjectId) && numericProjectId > 0) {
-        api
-          .post(`/projects/${numericProjectId}/exports`, {
-            file_name: fileName,
-            format: 'png',
-            width_cm: physicalWidthCm,
-            height_cm: physicalHeightCm,
-            dpi,
-            pixel_width: pixelWidth,
-            pixel_height: pixelHeight,
-          })
-          .catch(() => {
-            // Pencatatan riwayat ekspor bersifat non-blocking.
-          })
-      }
-
-      return {
-        fileName,
-        pixelWidth,
-        pixelHeight,
-        physicalWidthCm,
-        physicalHeightCm,
-        dpi,
-        warningCount: clippingWarnings.length,
-      }
     } finally {
-      printBoundaries.forEach((boundary) => {
-        boundary.visible = true
-      })
       canvas.backgroundColor = previousBackground
       canvas.requestRenderAll()
     }
@@ -1645,31 +417,17 @@ return {
   selectedObject,
   layers,
   analysis,
-  designPreview,
-  designPreviewVersion,
-  sidePreviews,
-  setPrintArea,
-  serializeCanvas,
-  restoreCanvas,
-  switchDesignSide,
-  resetSideDesigns,
   isAnalyzing,
   analysisError,
   analyzeSelectedImage,
-  applyRecommendedPlacement,
   uploadImage,
   addText,
   deleteSelected,
-  duplicateSelected,
   rotateSelected,
   moveLayer,
   selectLayer,
   updateProperty,
   exportDesign,
   resizeCanvas,
-  undo,
-  redo,
-  canUndo,
-  canRedo,
 }
 }
