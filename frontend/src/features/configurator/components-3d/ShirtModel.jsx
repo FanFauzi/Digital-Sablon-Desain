@@ -532,7 +532,7 @@ function isfiniteBounds(minVal, maxVal) {
 /**
  * Normalisasi skala, posisi tengah, orientasi, dan area cetak untuk model .FBX maupun .GLB.
  */
-function normalizeAndPrepareModel(rawRoot) {
+function normalizeAndPrepareModel(rawRoot, orientationHint = '') {
   rawRoot.updateMatrixWorld(true)
 
   const bodyGeometries = []
@@ -558,6 +558,15 @@ function normalizeAndPrepareModel(rawRoot) {
       printMeshes: {},
       surfaceMapping: null,
     }
+  }
+
+  // Convert the new Sketchfab Hoodie from its source axes (X = depth,
+  // Y = height, Z = width) into the configurator axes (X = width,
+  // Y = height, Z = depth). This must happen before bounds, UVs,
+  // front/back surfaces, and sleeve surfaces are calculated.
+  if (orientationHint === 'hoodie-sketchfab') {
+    const canonicalRotation = new THREE.Matrix4().makeRotationY(Math.PI / 2)
+    bodyGeometries.forEach((geometry) => geometry.applyMatrix4(canonicalRotation))
   }
 
   const computeCombinedBox = (geoms) => {
@@ -643,8 +652,8 @@ async function probeModelPath(url) {
 /**
  * Muat file .FBX atau .GLB dan kembalikan struktur geometri terstandarisasi.
  */
-async function loadPrepared3DModel(url, formatHint = '') {
-  const cacheKey = `${url}::${formatHint}`
+async function loadPrepared3DModel(url, formatHint = '', orientationHint = '') {
+  const cacheKey = `${url}::${formatHint}::${orientationHint}`
   if (modelCache.has(cacheKey)) {
     return modelCache.get(cacheKey)
   }
@@ -674,7 +683,7 @@ async function loadPrepared3DModel(url, formatHint = '') {
     }
   })
 
-  const prepared = normalizeAndPrepareModel(rawRoot)
+  const prepared = normalizeAndPrepareModel(rawRoot, orientationHint)
 
   if (prepared.totalVertices <= 15000) {
     const allDeformable = [
@@ -887,7 +896,11 @@ export default function ShirtModel({
         if (!exists) continue
 
         try {
-          const loaded = await loadPrepared3DModel(candidateUrl)
+          const loaded = await loadPrepared3DModel(
+            candidateUrl,
+            '',
+            modelSpec.pathOrientations?.[candidateUrl] || ''
+          )
           applyLoadedModel(loaded, candidateUrl.split('/').pop())
           return
         } catch (err) {
@@ -900,7 +913,11 @@ export default function ShirtModel({
 
       if (modelSpec.fallbackPath) {
         try {
-          const loaded = await loadPrepared3DModel(modelSpec.fallbackPath)
+          const loaded = await loadPrepared3DModel(
+            modelSpec.fallbackPath,
+            '',
+            modelSpec.pathOrientations?.[modelSpec.fallbackPath] || ''
+          )
           applyLoadedModel(loaded, modelSpec.fallbackPath.split('/').pop())
         } catch (err) {
           console.error('Gagal memuat fallback model 3D:', err)
