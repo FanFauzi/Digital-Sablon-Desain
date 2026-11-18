@@ -1144,18 +1144,36 @@ export default function ShirtModel({
           castShadow
           receiveShadow
         >
-          <meshStandardMaterial
-            color={acidWashMap ? '#ffffff' : previewFabricColor}
-            map={acidWashMap || null}
-            bumpMap={fabricBumpMap}
-            bumpScale={fabricConfig.bumpScale}
-            roughness={previewRoughness}
-            emissive={isDarkGarment && !acidWashMap ? '#202020' : '#000000'}
-            emissiveIntensity={isDarkGarment && !acidWashMap ? 0.65 : 0}
-            metalness={0.02}
-            wireframe={motion?.mode === 'knit'}
-            side={THREE.DoubleSide}
-          />
+          {isDarkGarment ? (
+            <meshPhysicalMaterial
+              color={acidWashMap ? '#ffffff' : previewFabricColor}
+              map={acidWashMap || null}
+              bumpMap={fabricBumpMap}
+              bumpScale={fabricConfig.bumpScale}
+              roughness={previewRoughness}
+              emissive={acidWashMap ? '#000000' : '#202020'}
+              emissiveIntensity={acidWashMap ? 0 : 0.65}
+              metalness={0.02}
+              sheen={acidWashMap ? 0 : 0.32}
+              sheenColor="#777777"
+              sheenRoughness={0.9}
+              wireframe={motion?.mode === 'knit'}
+              side={THREE.DoubleSide}
+            />
+          ) : (
+            <meshStandardMaterial
+              color={acidWashMap ? '#ffffff' : previewFabricColor}
+              map={acidWashMap || null}
+              bumpMap={fabricBumpMap}
+              bumpScale={fabricConfig.bumpScale}
+              roughness={previewRoughness}
+              emissive="#000000"
+              emissiveIntensity={0}
+              metalness={0.02}
+              wireframe={motion?.mode === 'knit'}
+              side={THREE.DoubleSide}
+            />
+          )}
         </mesh>
       ))}
 
