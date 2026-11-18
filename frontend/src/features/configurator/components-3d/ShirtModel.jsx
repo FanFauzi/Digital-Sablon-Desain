@@ -565,7 +565,7 @@ function normalizeAndPrepareModel(rawRoot, orientationHint = '') {
   // Y = height, Z = depth). This must happen before bounds, UVs,
   // front/back surfaces, and sleeve surfaces are calculated.
   if (orientationHint === 'hoodie-sketchfab') {
-    const canonicalRotation = new THREE.Matrix4().makeRotationY(Math.PI / 2)
+    const canonicalRotation = new THREE.Matrix4().makeRotationY(-Math.PI / 2)
     bodyGeometries.forEach((geometry) => geometry.applyMatrix4(canonicalRotation))
   }
 
