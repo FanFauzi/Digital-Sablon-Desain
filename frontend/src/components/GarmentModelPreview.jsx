@@ -56,7 +56,7 @@ function GarmentModel({ modelPath }) {
     if (modelPath.endsWith('/hoodie.glb')) {
       // Match the axis normalization used by the real-time configurator.
       // The new Hoodie GLB has width on Z and depth on X.
-      object.rotation.y = Math.PI / 2
+      object.rotation.y = -Math.PI / 2
     } else if (initialSize.z > initialSize.y * 1.35) {
       // Model Z-up standar: ubah sumbu Z menjadi sumbu tinggi Y.
       object.rotation.x = -Math.PI / 2
