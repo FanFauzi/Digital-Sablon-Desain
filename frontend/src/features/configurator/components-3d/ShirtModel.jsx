@@ -936,6 +936,32 @@ export default function ShirtModel({
     return getFabricBumpTexture(fabricConfig.id, fabricConfig.weaveScale)
   }, [fabricConfig])
 
+  // A mathematically pure black albedo absorbs all diffuse light and hides the
+  // garment silhouette. Apply a tiny render-only lift so folds remain readable;
+  // the selected product/variant color is not modified or persisted.
+  const previewFabricColor = useMemo(() => {
+    const materialColor = new THREE.Color(color || '#ffffff')
+    const blackFloor = new THREE.Color('#202020').r
+    const isNearBlack =
+      Math.max(materialColor.r, materialColor.g, materialColor.b) < new THREE.Color('#303030').r
+
+    if (!isNearBlack) return color
+    const lift = Math.max(0, blackFloor - Math.min(materialColor.r, materialColor.g, materialColor.b))
+    materialColor.r += lift
+    materialColor.g += lift
+    materialColor.b += lift
+    return materialColor
+  }, [color])
+
+  const isDarkGarment = useMemo(() => {
+    const materialColor = new THREE.Color(color || '#ffffff')
+    return Math.max(materialColor.r, materialColor.g, materialColor.b) < new THREE.Color('#404040').r
+  }, [color])
+
+  const previewRoughness = isDarkGarment
+    ? Math.min(fabricConfig.roughness, 0.68)
+    : fabricConfig.roughness
+
   const acidWashMap = useMemo(() => {
     if (!materialEffects?.acidWash?.enabled) return null
     return getAcidWashTexture(
@@ -1119,11 +1145,13 @@ export default function ShirtModel({
           receiveShadow
         >
           <meshStandardMaterial
-            color={acidWashMap ? '#ffffff' : color}
+            color={acidWashMap ? '#ffffff' : previewFabricColor}
             map={acidWashMap || null}
             bumpMap={fabricBumpMap}
             bumpScale={fabricConfig.bumpScale}
-            roughness={fabricConfig.roughness}
+            roughness={previewRoughness}
+            emissive={isDarkGarment && !acidWashMap ? '#080808' : '#000000'}
+            emissiveIntensity={isDarkGarment && !acidWashMap ? 0.18 : 0}
             metalness={0.02}
             wireframe={motion?.mode === 'knit'}
             side={THREE.DoubleSide}
