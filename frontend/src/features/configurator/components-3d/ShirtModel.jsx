@@ -936,12 +936,12 @@ export default function ShirtModel({
     return getFabricBumpTexture(fabricConfig.id, fabricConfig.weaveScale)
   }, [fabricConfig])
 
-  // A mathematically pure black albedo absorbs all diffuse light and hides the
-  // garment silhouette. Apply a tiny render-only lift so folds remain readable;
-  // the selected product/variant color is not modified or persisted.
+  // Keep black garments visually black, but lift the render-only albedo to charcoal
+  // so the weave, folds, and silhouette remain visible in a standard-lit 3D preview.
+  // The selected product/variant color is never modified or persisted.
   const previewFabricColor = useMemo(() => {
     const materialColor = new THREE.Color(color || '#ffffff')
-    const blackFloor = new THREE.Color('#202020').r
+    const blackFloor = new THREE.Color('#383838').r
     const isNearBlack =
       Math.max(materialColor.r, materialColor.g, materialColor.b) < new THREE.Color('#303030').r
 
@@ -1150,8 +1150,8 @@ export default function ShirtModel({
             bumpMap={fabricBumpMap}
             bumpScale={fabricConfig.bumpScale}
             roughness={previewRoughness}
-            emissive={isDarkGarment && !acidWashMap ? '#080808' : '#000000'}
-            emissiveIntensity={isDarkGarment && !acidWashMap ? 0.18 : 0}
+            emissive={isDarkGarment && !acidWashMap ? '#202020' : '#000000'}
+            emissiveIntensity={isDarkGarment && !acidWashMap ? 0.65 : 0}
             metalness={0.02}
             wireframe={motion?.mode === 'knit'}
             side={THREE.DoubleSide}
