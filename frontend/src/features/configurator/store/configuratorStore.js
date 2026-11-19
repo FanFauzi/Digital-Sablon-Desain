@@ -19,6 +19,11 @@ export const GARMENT_MODELS = [
     type: 'hoodie',
     modelPath: '/models/hoodie.glb',
     candidatePaths: ['/models/hoodie.glb'],
+    // GLB sumber memerlukan koreksi -90° Y agar dada menghadap kamera +Z
+    // dan sisi kiri/kanan mengikuti orientasi pengguna.
+    pathOrientations: {
+      '/models/hoodie.glb': 'hoodie-source-axes-positive-y',
+    },
     fallbackPath: '/models/hoodie-classic.glb',
     description: 'Model hoodie GLB untuk kustomisasi desain pada bagian depan, belakang, dan lengan.',
   },
