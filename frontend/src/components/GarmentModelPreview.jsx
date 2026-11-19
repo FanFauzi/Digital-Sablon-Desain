@@ -55,7 +55,7 @@ function GarmentModel({ modelPath }) {
 
     if (modelPath.endsWith('/hoodie.glb')) {
       // Samakan orientasi kartu preview dengan sumbu kanonis konfigurator.
-      object.rotation.y = Math.PI / 2
+      object.rotation.y = -Math.PI / 2
     } else if (initialSize.z > initialSize.y * 1.35) {
       // Model Z-up standar: ubah sumbu Z menjadi sumbu tinggi Y.
       object.rotation.x = -Math.PI / 2
