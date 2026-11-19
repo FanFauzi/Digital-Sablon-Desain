@@ -19,8 +19,8 @@ export const GARMENT_MODELS = [
     type: 'hoodie',
     modelPath: '/models/hoodie.glb',
     candidatePaths: ['/models/hoodie.glb'],
-    // GLB sumber menyimpan lebar pada Z dan kedalaman pada X.
-    // Rotasi +90° di ShirtModel memetakan sumbu lebar ke X dan depan/belakang ke Z.
+    // GLB sumber memerlukan koreksi -90° Y agar dada menghadap kamera +Z
+    // dan sisi kiri/kanan mengikuti orientasi pengguna.
     pathOrientations: {
       '/models/hoodie.glb': 'hoodie-source-axes-positive-y',
     },
