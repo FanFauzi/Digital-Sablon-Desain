@@ -551,10 +551,10 @@ function normalizeAndPrepareModel(rawRoot, orientationHint = '') {
   })
 
   // Model hoodie sumber mempunyai lebar pada sumbu Z dan kedalaman pada sumbu X.
-  // Putar +90° Y sebelum bounds, UV, dan klasifikasi permukaan dihitung.
-  // Ini menempatkan lebar pakaian pada X dan bidang depan/belakang pada Z.
+  // Putar -90° Y sebelum bounds, UV, dan klasifikasi permukaan dihitung.
+  // Ini menempatkan sisi dada pada +Z dan membetulkan label kedua lengan.
   if (orientationHint === 'hoodie-source-axes-positive-y') {
-    const canonicalRotation = new THREE.Matrix4().makeRotationY(Math.PI / 2)
+    const canonicalRotation = new THREE.Matrix4().makeRotationY(-Math.PI / 2)
     bodyGeometries.forEach((geometry) => geometry.applyMatrix4(canonicalRotation))
   }
 
